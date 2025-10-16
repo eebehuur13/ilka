@@ -1,0 +1,35 @@
+name = "ilka"
+main = "src/index.ts"
+compatibility_date = "2024-10-16"
+node_compat = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "ilka-db"
+database_id = "b0ced007-1e1b-468e-999d-79dd14669112"
+
+[[r2_buckets]]
+binding = "STORAGE"
+bucket_name = "ilka-documents"
+
+[[vectorize]]
+binding = "VECTORIZE"
+index_name = "ilka-embeddings"
+
+[[queues.producers]]
+binding = "QUEUE"
+queue = "ilka-processing"
+
+[[queues.consumers]]
+queue = "ilka-processing"
+max_batch_size = 1
+max_batch_timeout = 30
+max_retries = 3
+
+[ai]
+binding = "AI"
+
+# Add your OpenAI API key as a secret:
+# wrangler secret put OPENAI_API_KEY
+# Secrets (set via CLI):
+# - OPENAI_API_KEY
