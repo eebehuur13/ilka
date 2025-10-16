@@ -5,9 +5,11 @@ import { Progress } from '@/components/ui/progress'
 import { useUIStore } from '@/stores/useUIStore'
 import { useFileStore } from '@/stores/useFileStore'
 import { uploadDocument } from '@/lib/api'
+import { getUserId } from '@/lib/auth'
 import { cn } from '@/lib/utils'
+import type { DocumentStatus } from '@/types'
 
-const USER_ID = 'test-user' // TODO: Get from auth
+const USER_ID = getUserId()
 
 export const UploadModal = () => {
   const [dragActive, setDragActive] = useState(false)
@@ -39,9 +41,9 @@ export const UploadModal = () => {
       setProgress(100)
 
       addDocument({
-        id: response.id || `doc-${Date.now()}`,
+        id: response.document_id,
         file_name: file.name,
-        status: 'processing',
+        status: response.status as DocumentStatus,
         file_size: file.size,
         upload_date: Date.now(),
         progress: 0

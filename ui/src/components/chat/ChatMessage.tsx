@@ -1,5 +1,6 @@
 import { User, Brain, ChevronDown } from 'lucide-react'
 import { useState } from 'react'
+import ReactMarkdown from 'react-markdown'
 import type { ChatMessage as ChatMessageType } from '@/types'
 import { Logo } from '@/components/common/Logo'
 import { formatTime } from '@/lib/utils'
@@ -82,10 +83,8 @@ export const ChatMessage = ({ message }: ChatMessageProps) => {
         )}
 
         <div className="prose prose-sm max-w-none">
-          <p className="text-gray-900 whitespace-pre-wrap">
-            {message.content}
-            {message.isStreaming && <span className="inline-block w-2 h-4 ml-1 bg-gray-900 animate-pulse" />}
-          </p>
+          <ReactMarkdown>{message.content}</ReactMarkdown>
+          {message.isStreaming && <span className="inline-block w-2 h-4 ml-1 bg-gray-900 animate-pulse" />}
         </div>
 
         {message.method && message.method.some(m => m.citations && m.citations.length > 0) && (

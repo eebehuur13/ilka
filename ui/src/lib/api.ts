@@ -10,7 +10,7 @@ const api = axios.create({
   }
 })
 
-export const uploadDocument = async (fileName: string, content: string, userId: string): Promise<Document> => {
+export const uploadDocument = async (fileName: string, content: string, userId: string): Promise<{ document_id: string; status: string; message: string }> => {
   const response = await api.post('/upload', {
     file_name: fileName,
     content,

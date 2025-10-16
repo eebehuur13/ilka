@@ -3,6 +3,8 @@ import type { Document } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { useFileStore } from '@/stores/useFileStore'
+import { deleteDocument } from '@/lib/api'
+import { getUserId } from '@/lib/auth'
 import { formatRelativeTime, formatFileSize } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 
@@ -49,10 +51,16 @@ export const FileCard = ({ document }: FileCardProps) => {
     }
   }
 
-  const handleDelete = (e: React.MouseEvent) => {
+  const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation()
     if (confirm(`Delete ${document.file_name}?`)) {
-      removeDocument(document.id)
+      try {
+        await deleteDocument(document.id, getUserId())
+        removeDocument(document.id)
+      } catch (error) {
+        console.error('Failed to delete document:', error)
+        alert('Failed to delete document. Please try again.')
+      }
     }
   }
 

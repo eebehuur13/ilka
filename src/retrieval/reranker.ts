@@ -54,39 +54,72 @@ export class Reranker {
   }
 
   private async embed(text: string): Promise<number[]> {
-    const response = await fetch('https://api.openai.com/v1/embeddings', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${this.openaiApiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: 'text-embedding-3-small',
-        input: text,
-        dimensions: 1536
+    try {
+      const response = await fetch('https://api.openai.com/v1/embeddings', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.openaiApiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'text-embedding-3-small',
+          input: text,
+          dimensions: 1536
+        })
       })
-    })
-    
-    const data = await response.json()
-    return data.data[0].embedding
+      
+      if (!response.ok) {
+        throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`)
+      }
+      
+      const data = await response.json()
+      
+      if (!data.data || !data.data[0] || !data.data[0].embedding) {
+        throw new Error('Invalid response from OpenAI API: missing embedding data')
+      }
+      
+      return data.data[0].embedding
+    } catch (error) {
+      console.error('Reranker embedding error:', error)
+      throw new Error(`Failed to generate embedding for reranking: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
   }
 
   private async embedBatch(texts: string[]): Promise<number[][]> {
-    const response = await fetch('https://api.openai.com/v1/embeddings', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${this.openaiApiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: 'text-embedding-3-small',
-        input: texts,
-        dimensions: 1536
+    try {
+      const response = await fetch('https://api.openai.com/v1/embeddings', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.openaiApiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'text-embedding-3-small',
+          input: texts,
+          dimensions: 1536
+        })
       })
-    })
-    
-    const data = await response.json()
-    return data.data.map((item: any) => item.embedding)
+      
+      if (!response.ok) {
+        throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`)
+      }
+      
+      const data = await response.json()
+      
+      if (!data.data || !Array.isArray(data.data)) {
+        throw new Error('Invalid response from OpenAI API: missing embedding data array')
+      }
+      
+      return data.data.map((item: any) => {
+        if (!item.embedding) {
+          throw new Error('Invalid response from OpenAI API: missing embedding in item')
+        }
+        return item.embedding
+      })
+    } catch (error) {
+      console.error('Reranker batch embedding error:', error)
+      throw new Error(`Failed to generate batch embeddings for reranking: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
   }
 
   private cosineSimilarity(a: number[], b: number[]): number {

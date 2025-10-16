@@ -4,9 +4,10 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { useChatStore } from '@/stores/useChatStore'
 import { queryDocuments, queryDocumentsStream } from '@/lib/api'
+import { getUserId } from '@/lib/auth'
 import type { ChatMessage, MethodResult } from '@/types'
 
-const USER_ID = 'test-user' // TODO: Get from auth
+const USER_ID = getUserId()
 
 export const ChatInput = () => {
   const [input, setInput] = useState('')

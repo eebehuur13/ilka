@@ -76,13 +76,14 @@ ANSWER:
 
 Always use exactly these section headers: "THINKING:" and "ANSWER:"`;
 
-        const response = await env.AI.run('@cf/openai/gpt-oss-120b', {
-          input: [
+        // Use QwQ-32B - real reasoning model with chain-of-thought
+        const response = await env.AI.run('@cf/qwen/qwq-32b', {
+          messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: query }
           ],
           stream: true,
-          max_output_tokens: 2000,
+          max_tokens: 2000,
           temperature: 0.7
         });
 
@@ -90,65 +91,128 @@ Always use exactly these section headers: "THINKING:" and "ANSWER:"`;
         let currentSection: 'thinking' | 'answer' | 'initial' = 'initial';
         let thinkingComplete = false;
 
-        // Stream tokens as they arrive
-        for await (const chunk of response as any) {
-          const text = chunk.response || '';
-          buffer += text;
+        // Check if response is a ReadableStream
+        if (response instanceof ReadableStream) {
+          const reader = response.getReader();
+          const decoder = new TextDecoder();
+          let sseBuffer = '';
+          
+          try {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              
+              // Llama returns SSE format - parse it
+              const chunk = decoder.decode(value, { stream: true });
+              sseBuffer += chunk;
+              
+              // Process complete SSE messages
+              const lines = sseBuffer.split('\n');
+              sseBuffer = lines.pop() || ''; // Keep incomplete line
+              
+              for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                  const data = line.slice(6);
+                  if (data === '[DONE]') continue;
+                  
+                  try {
+                    const parsed = JSON.parse(data);
+                    const text = parsed.response || '';
+                    if (!text) continue;
+                    
+                    buffer += text;
 
-          // Detect ANSWER: transition
-          if (!thinkingComplete && buffer.includes('ANSWER:')) {
-            const parts = buffer.split('ANSWER:');
-            const thinkingText = parts[0].replace('THINKING:', '').trim();
-            
-            // Send complete thinking section
-            await writer.write(
-              encoder.encode(
-                `data: ${JSON.stringify({ 
-                  type: 'thinking_complete', 
-                  text: thinkingText 
-                })}\n\n`
-              )
-            );
-            
-            thinkingComplete = true;
-            currentSection = 'answer';
-            buffer = parts[1] || '';
-            
-            // Send start of answer
-            if (buffer) {
-              await writer.write(
-                encoder.encode(
-                  `data: ${JSON.stringify({ 
-                    type: 'answer', 
-                    text: buffer 
-                  })}\n\n`
-                )
-              );
+                    // Detect ANSWER: transition
+                    if (!thinkingComplete && buffer.includes('ANSWER:')) {
+                      const parts = buffer.split('ANSWER:');
+                      const thinkingText = parts[0].replace('THINKING:', '').trim();
+                      
+                      // Send complete thinking section
+                      await writer.write(
+                        encoder.encode(
+                          `data: ${JSON.stringify({ 
+                            type: 'thinking_complete', 
+                            text: thinkingText 
+                          })}\n\n`
+                        )
+                      );
+                      
+                      thinkingComplete = true;
+                      currentSection = 'answer';
+                      buffer = parts[1] || '';
+                      
+                      // Send start of answer
+                      if (buffer) {
+                        await writer.write(
+                          encoder.encode(
+                            `data: ${JSON.stringify({ 
+                              type: 'answer', 
+                              text: buffer 
+                            })}\n\n`
+                          )
+                        );
+                      }
+                      continue;
+                    }
+
+                    // Stream current section
+                    if (currentSection === 'initial' && text) {
+                      // Still in thinking section
+                      await writer.write(
+                        encoder.encode(
+                          `data: ${JSON.stringify({ 
+                            type: 'thinking', 
+                            text: text 
+                          })}\n\n`
+                        )
+                      );
+                    } else if (currentSection === 'answer' && text) {
+                      // Streaming answer
+                      await writer.write(
+                        encoder.encode(
+                          `data: ${JSON.stringify({ 
+                            type: 'answer', 
+                            text: text 
+                          })}\n\n`
+                        )
+                      );
+                    }
+                  } catch (parseError) {
+                    // Skip unparseable SSE data
+                    continue;
+                  }
+                }
+              }
             }
-            continue;
+          } catch (streamError) {
+            console.error('ReadableStream error:', streamError);
+            throw streamError;
           }
+        } else {
+          // Fallback: Not a ReadableStream, try async iteration
+          for await (const chunk of response as any) {
+            // Llama 3.1 streaming format
+            const text = chunk.response || '';
+            if (!text) continue;
+            buffer += text;
 
-          // Stream current section
-          if (currentSection === 'initial' && text) {
-            // Still in thinking section
-            await writer.write(
-              encoder.encode(
-                `data: ${JSON.stringify({ 
-                  type: 'thinking', 
-                  text: text 
-                })}\n\n`
-              )
-            );
-          } else if (currentSection === 'answer' && text) {
-            // Streaming answer
-            await writer.write(
-              encoder.encode(
-                `data: ${JSON.stringify({ 
-                  type: 'answer', 
-                  text: text 
-                })}\n\n`
-              )
-            );
+            // Same logic as above for ANSWER: detection and streaming
+            if (!thinkingComplete && buffer.includes('ANSWER:')) {
+              const parts = buffer.split('ANSWER:');
+              const thinkingText = parts[0].replace('THINKING:', '').trim();
+              await writer.write(encoder.encode(`data: ${JSON.stringify({ type: 'thinking_complete', text: thinkingText })}\n\n`));
+              thinkingComplete = true;
+              currentSection = 'answer';
+              buffer = parts[1] || '';
+              if (buffer) await writer.write(encoder.encode(`data: ${JSON.stringify({ type: 'answer', text: buffer })}\n\n`));
+              continue;
+            }
+
+            if (currentSection === 'initial' && text) {
+              await writer.write(encoder.encode(`data: ${JSON.stringify({ type: 'thinking', text })}\n\n`));
+            } else if (currentSection === 'answer' && text) {
+              await writer.write(encoder.encode(`data: ${JSON.stringify({ type: 'answer', text })}\n\n`));
+            }
           }
         }
 
@@ -215,13 +279,13 @@ export async function handleQuery(request: Request, env: Env): Promise<Response>
 
     // Handle model-only mode: Skip all retrieval, just use LLM
     if (mode === 'model-only') {
-      const response = await env.AI.run('@cf/openai/gpt-oss-120b', {
-        input: [{ role: 'user', content: query }],
-        max_output_tokens: 2000,
+      const response = await env.AI.run('@cf/qwen/qwq-32b', {
+        messages: [{ role: 'user', content: query }],
+        max_tokens: 2000,
         temperature: 0.7
       });
 
-      const text = (response as any).output?.[0]?.content?.[0]?.text || (response as any).response || '';
+      const text = (response as any).response || '';
 
       return jsonResponse({
         query,
@@ -342,7 +406,7 @@ export async function handleDeleteDocument(request: Request, env: Env): Promise<
     // Delete vectors FIRST (before D1 cascade deletes passage records)
     const vectorRetriever = new VectorRetriever(env.VECTORIZE, env.OPENAI_API_KEY, env.DB);
     try {
-      await vectorRetriever.deleteDocumentVectors(documentId);
+      await vectorRetriever.deleteDocumentVectors(documentId, `user-${userId}`);
     } catch (error) {
       console.error('Failed to delete vectors:', error);
       // Continue with deletion even if vector cleanup fails

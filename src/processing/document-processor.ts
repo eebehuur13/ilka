@@ -62,7 +62,12 @@ export class DocumentProcessor {
       );
     }
 
-    await this.env.DB.batch(statements);
+    // D1 batch limit is 50 statements - chunk into batches
+    const batchSize = 50;
+    for (let i = 0; i < statements.length; i += batchSize) {
+      const batch = statements.slice(i, i + batchSize);
+      await this.env.DB.batch(batch);
+    }
   }
 
   private async getDocument(documentId: string): Promise<Document | null> {
