@@ -3,7 +3,7 @@ import { Send, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { useChatStore } from '@/stores/useChatStore'
-import { queryDocuments } from '@/lib/api'
+import { queryDocuments, queryDocumentsStream } from '@/lib/api'
 import type { ChatMessage, MethodResult } from '@/types'
 
 const USER_ID = 'test-user' // TODO: Get from auth
@@ -24,36 +24,89 @@ export const ChatInput = () => {
     }
 
     addMessage(userMessage)
+    const query = input.trim()
     setInput('')
     setIsProcessing(true)
 
     try {
-      // Call API with mode
-      const response = await queryDocuments(input.trim(), USER_ID, {
-        mode,
-        methods: mode === 'file-search' ? ['bm25'] : undefined
-      })
+      // Use streaming for model-only mode
+      if (mode === 'model-only') {
+        const aiMessageId = `msg-${Date.now()}-ai`
+        let thinking = ''
+        let answer = ''
 
-      // Create AI message with method results
-      const methods: MethodResult[] = response.answers.map((answer: any) => ({
-        method: answer.method,
-        label: answer.method.includes('bm25') ? '⚡ Fast Search' : '🧠 Deep Search',
-        latency_ms: answer.latency_ms,
-        answer: answer.text,
-        citations: answer.citations,
-        confidence: answer.confidence,
-        status: 'complete' as const
-      }))
+        // Create initial streaming message
+        const aiMessage: ChatMessage = {
+          id: aiMessageId,
+          role: 'assistant',
+          content: '',
+          timestamp: new Date(),
+          thinking: '',
+          isStreaming: true
+        }
+        addMessage(aiMessage)
 
-      const aiMessage: ChatMessage = {
-        id: `msg-${Date.now()}-ai`,
-        role: 'assistant',
-        content: response.answers[0]?.text || 'No answer generated',
-        timestamp: new Date(),
-        method: methods
+        await queryDocumentsStream(
+          query,
+          USER_ID,
+          (event) => {
+            const { updateMessage } = useChatStore.getState()
+            
+            if (event.type === 'thinking') {
+              thinking += event.text || ''
+              updateMessage(aiMessageId, { thinking, isStreaming: true })
+            } else if (event.type === 'thinking_complete') {
+              thinking = event.text || ''
+              updateMessage(aiMessageId, { thinking, isStreaming: true })
+            } else if (event.type === 'answer') {
+              answer += event.text || ''
+              updateMessage(aiMessageId, { content: answer, thinking, isStreaming: true })
+            } else if (event.type === 'done') {
+              updateMessage(aiMessageId, { content: answer, thinking, isStreaming: false })
+            } else if (event.type === 'error') {
+              updateMessage(aiMessageId, { 
+                content: 'Sorry, I encountered an error: ' + (event.message || 'Unknown error'),
+                isStreaming: false 
+              })
+            }
+          },
+          (error) => {
+            console.error('Stream error:', error)
+            const { updateMessage } = useChatStore.getState()
+            updateMessage(aiMessageId, { 
+              content: 'Sorry, I encountered an error processing your query.',
+              isStreaming: false 
+            })
+          }
+        )
+      } else {
+        // Non-streaming file-search mode
+        const response = await queryDocuments(query, USER_ID, {
+          mode,
+          methods: ['bm25']
+        })
+
+        // Create AI message with method results
+        const methods: MethodResult[] = response.answers.map((answer: any) => ({
+          method: answer.method,
+          label: answer.method.includes('bm25') ? '⚡ Fast Search' : '🧠 Deep Search',
+          latency_ms: answer.latency_ms,
+          answer: answer.text,
+          citations: answer.citations,
+          confidence: answer.confidence,
+          status: 'complete' as const
+        }))
+
+        const aiMessage: ChatMessage = {
+          id: `msg-${Date.now()}-ai`,
+          role: 'assistant',
+          content: response.answers[0]?.text || 'No answer generated',
+          timestamp: new Date(),
+          method: methods
+        }
+
+        addMessage(aiMessage)
       }
-
-      addMessage(aiMessage)
     } catch (error) {
       console.error('Query failed:', error)
       const errorMessage: ChatMessage = {

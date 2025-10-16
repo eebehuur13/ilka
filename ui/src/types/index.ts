@@ -28,6 +28,8 @@ export interface ChatMessage {
   content: string
   timestamp: Date
   method?: MethodResult[]
+  thinking?: string
+  isStreaming?: boolean
 }
 
 export interface MethodResult {

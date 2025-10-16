@@ -45,6 +45,163 @@ export async function handleUpload(request: Request, env: Env): Promise<Response
   }
 }
 
+export async function handleQueryStream(request: Request, env: Env): Promise<Response> {
+  try {
+    const body: QueryRequest = await request.json();
+    const { query, user_id, mode } = body;
+
+    if (!query || !user_id) {
+      return jsonResponse({ error: 'Missing query or user_id' }, 400);
+    }
+
+    // Only support model-only mode for streaming
+    if (mode !== 'model-only') {
+      return jsonResponse({ error: 'Streaming only supports model-only mode' }, 400);
+    }
+
+    const { readable, writable } = new TransformStream();
+    const writer = writable.getWriter();
+    const encoder = new TextEncoder();
+
+    // Start streaming response in background
+    (async () => {
+      try {
+        const systemPrompt = `You are a helpful assistant. Always structure your response in two clear sections:
+
+THINKING:
+[Write your step-by-step reasoning and analysis here. Show your thought process.]
+
+ANSWER:
+[Write your final, concise answer here.]
+
+Always use exactly these section headers: "THINKING:" and "ANSWER:"`;
+
+        const response = await env.AI.run('@cf/openai/gpt-oss-120b', {
+          input: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: query }
+          ],
+          stream: true,
+          max_output_tokens: 2000,
+          temperature: 0.7
+        });
+
+        let buffer = '';
+        let currentSection: 'thinking' | 'answer' | 'initial' = 'initial';
+        let thinkingComplete = false;
+
+        // Stream tokens as they arrive
+        for await (const chunk of response as any) {
+          const text = chunk.response || '';
+          buffer += text;
+
+          // Detect ANSWER: transition
+          if (!thinkingComplete && buffer.includes('ANSWER:')) {
+            const parts = buffer.split('ANSWER:');
+            const thinkingText = parts[0].replace('THINKING:', '').trim();
+            
+            // Send complete thinking section
+            await writer.write(
+              encoder.encode(
+                `data: ${JSON.stringify({ 
+                  type: 'thinking_complete', 
+                  text: thinkingText 
+                })}\n\n`
+              )
+            );
+            
+            thinkingComplete = true;
+            currentSection = 'answer';
+            buffer = parts[1] || '';
+            
+            // Send start of answer
+            if (buffer) {
+              await writer.write(
+                encoder.encode(
+                  `data: ${JSON.stringify({ 
+                    type: 'answer', 
+                    text: buffer 
+                  })}\n\n`
+                )
+              );
+            }
+            continue;
+          }
+
+          // Stream current section
+          if (currentSection === 'initial' && text) {
+            // Still in thinking section
+            await writer.write(
+              encoder.encode(
+                `data: ${JSON.stringify({ 
+                  type: 'thinking', 
+                  text: text 
+                })}\n\n`
+              )
+            );
+          } else if (currentSection === 'answer' && text) {
+            // Streaming answer
+            await writer.write(
+              encoder.encode(
+                `data: ${JSON.stringify({ 
+                  type: 'answer', 
+                  text: text 
+                })}\n\n`
+              )
+            );
+          }
+        }
+
+        // If we never found ANSWER:, treat everything as answer
+        if (!thinkingComplete && buffer) {
+          await writer.write(
+            encoder.encode(
+              `data: ${JSON.stringify({ 
+                type: 'answer', 
+                text: buffer 
+              })}\n\n`
+            )
+          );
+        }
+
+        // Send completion
+        await writer.write(
+          encoder.encode(
+            `data: ${JSON.stringify({ type: 'done' })}\n\n`
+          )
+        );
+
+      } catch (error: any) {
+        console.error('Streaming error:', error);
+        await writer.write(
+          encoder.encode(
+            `data: ${JSON.stringify({ 
+              type: 'error', 
+              message: error.message 
+            })}\n\n`
+          )
+        );
+      } finally {
+        await writer.close();
+      }
+    })();
+
+    return new Response(readable, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': '*',
+        'X-Accel-Buffering': 'no'
+      }
+    });
+
+  } catch (error: any) {
+    console.error('Stream setup error:', error);
+    return jsonResponse({ error: error.message }, 500);
+  }
+}
+
 export async function handleQuery(request: Request, env: Env): Promise<Response> {
   try {
     const body: QueryRequest = await request.json();

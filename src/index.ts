@@ -2,6 +2,7 @@ import type { Env } from './types';
 import {
   handleUpload,
   handleQuery,
+  handleQueryStream,
   handleListDocuments,
   handleDeleteDocument,
   handleGetStatus
@@ -29,6 +30,8 @@ export default {
 
       if (pathname === '/upload' && method === 'POST') {
         response = await handleUpload(request, env);
+      } else if (pathname === '/query/stream' && method === 'POST') {
+        response = await handleQueryStream(request, env);
       } else if (pathname === '/query' && method === 'POST') {
         response = await handleQuery(request, env);
       } else if (pathname === '/documents' && method === 'GET') {

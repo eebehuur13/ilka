@@ -1,4 +1,5 @@
-import { User } from 'lucide-react'
+import { User, Brain, ChevronDown } from 'lucide-react'
+import { useState } from 'react'
 import type { ChatMessage as ChatMessageType } from '@/types'
 import { Logo } from '@/components/common/Logo'
 import { formatTime } from '@/lib/utils'
@@ -13,6 +14,7 @@ interface ChatMessageProps {
 
 export const ChatMessage = ({ message }: ChatMessageProps) => {
   const isUser = message.role === 'user'
+  const [showThinking, setShowThinking] = useState(false)
 
   if (isUser) {
     return (
@@ -54,8 +56,36 @@ export const ChatMessage = ({ message }: ChatMessageProps) => {
           </div>
         )}
 
+        {message.thinking && (
+          <div className="mb-3">
+            <button
+              onClick={() => setShowThinking(!showThinking)}
+              className="flex items-center gap-2 text-xs text-gray-600 hover:text-gray-900 transition-colors px-2 py-1 rounded hover:bg-gray-100"
+            >
+              <Brain className="w-4 h-4" />
+              <span>{showThinking ? 'Hide' : 'Show'} thinking process</span>
+              <ChevronDown className={`w-3 h-3 transition-transform ${showThinking ? 'rotate-180' : ''}`} />
+            </button>
+            
+            {showThinking && (
+              <div className="mt-2 p-3 bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg border border-gray-200">
+                <div className="flex items-center gap-2 text-xs font-medium text-gray-500 mb-2">
+                  <Brain className="w-3 h-3" />
+                  <span>Chain of Thought</span>
+                </div>
+                <div className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+                  {message.thinking}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="prose prose-sm max-w-none">
-          <p className="text-gray-900 whitespace-pre-wrap">{message.content}</p>
+          <p className="text-gray-900 whitespace-pre-wrap">
+            {message.content}
+            {message.isStreaming && <span className="inline-block w-2 h-4 ml-1 bg-gray-900 animate-pulse" />}
+          </p>
         </div>
 
         {message.method && message.method.some(m => m.citations && m.citations.length > 0) && (
