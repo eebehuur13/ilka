@@ -34,39 +34,39 @@ export class Method3VectorAgents {
 
     let topPassages = vectorResults.slice(0, 20);
 
-    while (round < 2) {
-      const decision = await this.supervisor.decide(query, topPassages, round);
+    // Answer-based feedback loop: generate answer, verify, then decide whether to widen
+    let answer = await this.writer.write(query, topPassages);
+    let verification = await this.verifier.verify(answer, topPassages);
 
-      if (decision.action === 'proceed') break;
+    while (round < 3 && !verification.passed) {
+      const decision = await this.supervisor.decide(query, topPassages, round, verification);
+
+      if (decision.action === 'proceed') {
+        // Supervisor decided to proceed despite failed verification
+        break;
+      }
 
       if (decision.action === 'widen' && decision.strategy) {
         topPassages = await this.contextMaker.widen(topPassages, decision.strategy);
         round++;
+        
+        // Regenerate answer with wider context
+        answer = await this.writer.write(query, topPassages);
+        verification = await this.verifier.verify(answer, topPassages);
       } else {
         break;
       }
-    }
-
-    const answer = await this.writer.write(query, topPassages);
-    const verification = await this.verifier.verify(answer);
-
-    if (!verification.passed && round < 2) {
-      topPassages = await this.contextMaker.widen(topPassages, 'full-section');
-      const retryAnswer = await this.writer.write(query, topPassages);
-      
-      return {
-        ...retryAnswer,
-        method: 'method3-vector-agents',
-        latency_ms: Date.now() - startTime,
-        metadata: { rounds: round + 1, verification_retry: true }
-      };
     }
 
     return {
       ...answer,
       method: 'method3-vector-agents',
       latency_ms: Date.now() - startTime,
-      metadata: { rounds: round, verification: verification }
+      metadata: { 
+        rounds: round, 
+        verification: verification,
+        final_passage_count: topPassages.length
+      }
     };
   }
 }

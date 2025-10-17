@@ -25,7 +25,7 @@ export class DocumentProcessor {
     await this.updateStatus(documentId, 'indexing_bm25');
     
     const passages = await this.getPassages(documentId);
-    await this.bm25.indexDocument(documentId, passages);
+    await this.bm25.indexDocument(documentId, doc.user_id, passages);
     
     await this.env.DB
       .prepare('UPDATE documents SET chunk_count = ?, status = ? WHERE id = ?')

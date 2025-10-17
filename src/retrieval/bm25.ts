@@ -20,7 +20,7 @@ export class BM25Retriever {
 
   constructor(private readonly db: D1Database) {}
 
-  async indexDocument(documentId: string, passages: Array<{
+  async indexDocument(documentId: string, userId: string, passages: Array<{
     id: string;
     text: string;
     word_count: number;
@@ -54,8 +54,12 @@ export class BM25Retriever {
       }
     }
 
-    // Use per-document passage count for IDF calculation (fixes global IDF overwriting bug)
-    const totalPassages = passages.length;
+    // Use user-level passage count for IDF calculation (enables cross-document ranking)
+    const userStats = await this.db
+      .prepare('SELECT COUNT(*) as total FROM passages p JOIN documents d ON p.document_id = d.id WHERE d.user_id = ?')
+      .bind(userId)
+      .first();
+    const totalPassages = (userStats?.total as number) || passages.length;
     
     const avgLength = passages.reduce((sum, p) => sum + p.word_count, 0) / passages.length;
     const uniqueTerms = termIndex.size;
@@ -76,15 +80,25 @@ export class BM25Retriever {
       }
     }
 
-    // Insert/update IDF scores (scoped per document to prevent global overwriting)
+    // Insert/update IDF scores (scoped per user for cross-document ranking)
+    // Get document frequencies across ALL user's documents
     for (const [term, docSet] of documentFrequency.entries()) {
-      const df = docSet.size;
+      // Query user-level document frequency
+      const userDfResult = await this.db.prepare(`
+        SELECT COUNT(DISTINCT p.document_id) as df
+        FROM bm25_terms bt
+        JOIN passages p ON bt.passage_id = p.id
+        JOIN documents d ON p.document_id = d.id
+        WHERE bt.term = ? AND d.user_id = ?
+      `).bind(term, userId).first();
+      
+      const df = (userDfResult?.df as number) || docSet.size;
       const idf = Math.log((totalPassages - df + 0.5) / (df + 0.5) + 1);
       
       statements.push(
         this.db.prepare(
-          'INSERT OR REPLACE INTO bm25_idf (term, document_id, document_frequency, idf_score, updated_at) VALUES (?, ?, ?, ?, ?)'
-        ).bind(term, documentId, df, idf, Date.now())
+          'INSERT OR REPLACE INTO bm25_idf (term, user_id, document_frequency, idf_score, updated_at) VALUES (?, ?, ?, ?, ?)'
+        ).bind(term, userId, df, idf, Date.now())
       );
     }
 
@@ -142,9 +156,9 @@ export class BM25Retriever {
         p.token_count,
         d.file_name
       FROM bm25_terms bt
-      JOIN bm25_idf bi ON bi.term = bt.term AND bi.document_id = bt.document_id
       JOIN passages p ON p.id = bt.passage_id
       JOIN documents d ON d.id = p.document_id
+      JOIN bm25_idf bi ON bi.term = bt.term AND bi.user_id = d.user_id
       WHERE bt.term IN (${allTerms.map(() => '?').join(',')})
     `;
 
@@ -367,9 +381,10 @@ export class BM25Retriever {
   }
 
   async deleteDocumentIndex(documentId: string): Promise<void> {
+    // Delete document-specific data
+    // Note: bm25_idf is user-scoped, so it will be updated on next document indexing
     await this.db.batch([
       this.db.prepare('DELETE FROM bm25_terms WHERE document_id = ?').bind(documentId),
-      this.db.prepare('DELETE FROM bm25_idf WHERE document_id = ?').bind(documentId),
       this.db.prepare('DELETE FROM bm25_stats WHERE document_id = ?').bind(documentId)
     ]);
   }
