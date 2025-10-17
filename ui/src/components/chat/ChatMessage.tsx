@@ -168,6 +168,38 @@ export const ChatMessage = ({ message, onRegenerate, onRelatedTermClick }: ChatM
                   : <code className="block bg-gray-100 p-3 rounded-md mb-4 text-sm font-mono overflow-x-auto" {...props} />
               },
               blockquote: ({children}) => <blockquote className="border-l-4 border-gray-300 pl-4 italic my-4 text-gray-700">{children}</blockquote>,
+              table: ({children}) => (
+                <div className="overflow-x-auto my-4">
+                  <table className="min-w-full divide-y divide-gray-300 border border-gray-300">
+                    {children}
+                  </table>
+                </div>
+              ),
+              thead: ({children}) => (
+                <thead className="bg-gray-50">
+                  {children}
+                </thead>
+              ),
+              tbody: ({children}) => (
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {children}
+                </tbody>
+              ),
+              tr: ({children}) => (
+                <tr>
+                  {children}
+                </tr>
+              ),
+              th: ({children}) => (
+                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-900 border-r border-gray-300 last:border-r-0">
+                  {children}
+                </th>
+              ),
+              td: ({children}) => (
+                <td className="px-3 py-2 text-sm text-gray-700 border-r border-gray-200 last:border-r-0">
+                  {children}
+                </td>
+              ),
             }}
           >
             {hasMultipleAnswers ? (currentAnswer?.answer || '') : message.content}
