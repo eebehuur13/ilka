@@ -61,6 +61,18 @@ async function processMessage(msg: QueueMessage, env: Env): Promise<void> {
       await embedder.embedDocument(document_id, user_id);
       break;
 
+    case 'generate_embeddings_batch':
+      const batchEmbedder = new DocumentEmbedder(env);
+      await batchEmbedder.embedDocumentBatch(
+        document_id,
+        user_id,
+        msg.start_index!,
+        msg.end_index!,
+        msg.batch_index!,
+        msg.total_batches!
+      );
+      break;
+
     default:
       console.warn('Unknown queue message type:', type);
   }

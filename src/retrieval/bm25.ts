@@ -82,17 +82,32 @@ export class BM25Retriever {
 
     // Insert/update IDF scores (scoped per user for cross-document ranking)
     // Get document frequencies across ALL user's documents
-    for (const [term, docSet] of documentFrequency.entries()) {
-      // Query user-level document frequency
-      const userDfResult = await this.db.prepare(`
-        SELECT COUNT(DISTINCT p.document_id) as df
+    // Batch queries to avoid timeout: chunk terms to stay under D1's 100-parameter limit
+    const allTerms = Array.from(documentFrequency.keys());
+    const dfLookup = new Map<string, number>();
+    const TERM_CHUNK_SIZE = 95;
+    
+    for (let i = 0; i < allTerms.length; i += TERM_CHUNK_SIZE) {
+      const termChunk = allTerms.slice(i, i + TERM_CHUNK_SIZE);
+      const placeholders = termChunk.map(() => '?').join(',');
+      
+      const batchResult = await this.db.prepare(`
+        SELECT bt.term, COUNT(DISTINCT p.document_id) as df
         FROM bm25_terms bt
         JOIN passages p ON bt.passage_id = p.id
         JOIN documents d ON p.document_id = d.id
-        WHERE bt.term = ? AND d.user_id = ?
-      `).bind(term, userId).first();
+        WHERE bt.term IN (${placeholders}) AND d.user_id = ?
+        GROUP BY bt.term
+      `).bind(...termChunk, userId).all();
       
-      const df = (userDfResult?.df as number) || docSet.size;
+      for (const row of (batchResult.results || [])) {
+        dfLookup.set(row.term as string, row.df as number);
+      }
+    }
+    
+    // Calculate IDF scores and prepare statements (scoring logic unchanged)
+    for (const [term, docSet] of documentFrequency.entries()) {
+      const df = dfLookup.get(term) || docSet.size;
       const idf = Math.log((totalPassages - df + 0.5) / (df + 0.5) + 1);
       
       statements.push(

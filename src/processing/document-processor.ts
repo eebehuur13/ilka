@@ -24,6 +24,9 @@ export class DocumentProcessor {
     await this.savePassages(documentId, chunks);
     await this.updateStatus(documentId, 'indexing_bm25');
     
+    // Clean up any old index data before re-indexing (prevents duplicate accumulation on retries)
+    await this.bm25.deleteDocumentIndex(documentId);
+    
     const passages = await this.getPassages(documentId);
     await this.bm25.indexDocument(documentId, doc.user_id, passages);
     

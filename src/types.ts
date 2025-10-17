@@ -161,6 +161,11 @@ export interface QueueMessage {
   document_id: string;
   user_id: string;
   metadata?: any;
+  // For parallel embedding batches
+  start_index?: number;
+  end_index?: number;
+  total_batches?: number;
+  batch_index?: number;
 }
 
 export type QueueMessageType =
@@ -168,6 +173,7 @@ export type QueueMessageType =
   | 'generate_summary'
   | 'generate_contexts'
   | 'generate_embeddings'
+  | 'generate_embeddings_batch'
   | 'index_bm25';
 
 // Context enrichment types

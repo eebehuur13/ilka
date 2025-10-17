@@ -26,6 +26,9 @@ max_batch_size = 1
 max_batch_timeout = 30
 max_retries = 3
 
+[limits]
+cpu_ms = 120000
+
 [ai]
 binding = "AI"
 

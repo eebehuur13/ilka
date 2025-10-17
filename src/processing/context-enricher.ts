@@ -10,6 +10,7 @@ export class ContextEnricher {
     const doc = await this.getDocument(documentId);
     if (!doc) throw new Error(`Document ${documentId} not found`);
 
+    const userId = doc.user_id as string;
     const summary = await this.getSummary(documentId);
     const passages = await this.getPassages(documentId);
 
@@ -33,6 +34,32 @@ export class ContextEnricher {
       .prepare('UPDATE documents SET status = ?, updated_at = ? WHERE id = ?')
       .bind('embedding', Date.now(), documentId)
       .run();
+
+    // Split embedding work into parallel batches for efficiency
+    const CHUNKS_PER_BATCH = 15; // Flexible batch size - adjust based on performance
+    const totalChunks = passages.length;
+    const numBatches = Math.ceil(totalChunks / CHUNKS_PER_BATCH);
+
+    const batchMessages = [];
+    for (let batchIdx = 0; batchIdx < numBatches; batchIdx++) {
+      const startIdx = batchIdx * CHUNKS_PER_BATCH;
+      const endIdx = Math.min(startIdx + CHUNKS_PER_BATCH, totalChunks);
+      
+      batchMessages.push({
+        body: {
+          type: 'generate_embeddings_batch' as const,
+          document_id: documentId,
+          user_id: userId,
+          start_index: startIdx,
+          end_index: endIdx,
+          batch_index: batchIdx,
+          total_batches: numBatches
+        }
+      });
+    }
+
+    // Send all batches at once - they'll process in parallel
+    await this.env.QUEUE.sendBatch(batchMessages);
   }
 
   private createBatches(passages: any[]): any[][] {
