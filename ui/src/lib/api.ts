@@ -22,7 +22,7 @@ export const uploadDocument = async (fileName: string, content: string, userId: 
 export const queryDocuments = async (
   query: string, 
   userId: string, 
-  options?: QueryOptions & { mode?: 'model-only' | 'file-search' }
+  options?: QueryOptions & { mode?: 'model-only' | 'file-search'; reasoning?: boolean }
 ) => {
   const response = await api.post('/query', {
     query,
@@ -63,7 +63,8 @@ export const queryDocumentsStream = async (
   userId: string,
   onEvent: (event: StreamEvent) => void,
   onError?: (error: Error) => void,
-  mode: 'model-only' | 'file-search' = 'model-only'
+  mode: 'model-only' | 'file-search' = 'model-only',
+  reasoning: boolean = false
 ) => {
   try {
     const response = await fetch(`${API_BASE_URL}/query/stream`, {
@@ -74,7 +75,8 @@ export const queryDocumentsStream = async (
       body: JSON.stringify({
         query,
         user_id: userId,
-        mode
+        mode,
+        reasoning
       })
     })
 

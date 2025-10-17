@@ -26,13 +26,13 @@ export class VectorRetriever {
         throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`)
       }
       
-      const data = await response.json()
+      const data = await response.json() as any
       
       if (!data.data || !data.data[0] || !data.data[0].embedding) {
         throw new Error('Invalid response from OpenAI API: missing embedding data')
       }
       
-      return data.data[0].embedding
+      return data.data[0].embedding as number[]
     } catch (error) {
       console.error('Embedding error:', error)
       throw new Error(`Failed to generate embedding: ${error instanceof Error ? error.message : 'Unknown error'}`)
@@ -58,7 +58,7 @@ export class VectorRetriever {
         throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`)
       }
       
-      const data = await response.json()
+      const data = await response.json() as any
       
       if (!data.data || !Array.isArray(data.data)) {
         throw new Error('Invalid response from OpenAI API: missing embedding data array')
@@ -68,7 +68,7 @@ export class VectorRetriever {
         if (!item.embedding) {
           throw new Error('Invalid response from OpenAI API: missing embedding in item')
         }
-        return item.embedding
+        return item.embedding as number[]
       })
     } catch (error) {
       console.error('Batch embedding error:', error)
@@ -100,8 +100,9 @@ export class VectorRetriever {
       metadata: {
         ...metadata,
         original_text: text,
-        contextualized_text: fullText
-      }
+        contextualized_text: fullText,
+        heading: metadata.heading || ''
+      } as Record<string, VectorizeVectorMetadata>
     }]);
   }
 
@@ -212,7 +213,7 @@ export class VectorRetriever {
     
     // Delete from the specified namespace (or default if not provided)
     for (const id of ids) {
-      await this.vectorize.deleteByIds([id], { namespace: namespace || 'default' });
+      await this.vectorize.deleteByIds([id]);
     }
   }
 }

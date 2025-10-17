@@ -3,6 +3,7 @@ import { VectorRetriever } from '../retrieval/vector';
 import { SupervisorAgent } from '../agents/supervisor';
 import { ContextMakerAgent } from '../agents/context-maker';
 import { WriterAgent } from '../agents/writer';
+import { GeminiClient } from '../llm/gemini-client';
 import { VerifierAgent } from '../agents/verifier';
 
 export class Method4HydeAgents {
@@ -77,12 +78,13 @@ Question: ${query}
 
 Write as if you're answering from a real document. Be specific and factual in tone.`;
 
-    const response = await this.env.AI.run('@cf/openai/gpt-oss-120b', {
-      input: [{ role: 'user', content: prompt }],
-      max_output_tokens: 300,
-      temperature: 0.5
+    const gemini = new GeminiClient(this.env.GEMINI_API_KEY);
+    const result = await gemini.generateContent(prompt, {
+      temperature: 0.5,
+      maxTokens: 300,
+      thinkingBudget: 0,
     });
 
-    return (response as any).output?.[0]?.content?.[0]?.text || (response as any).response || '';
+    return result.answer;
   }
 }

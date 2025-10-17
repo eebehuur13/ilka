@@ -1,4 +1,5 @@
 import type { Env, GeneratedContext } from '../types';
+import { GeminiClient } from '../llm/gemini-client';
 
 export class ContextEnricher {
   private readonly batchSize = 20;
@@ -69,17 +70,14 @@ Return JSON array:
   ...
 ]`;
 
-    const response = await this.env.AI.run('@cf/openai/gpt-oss-120b', {
-      input: [{ role: 'user', content: prompt }],
-      max_output_tokens: 2000,
-      temperature: 0.4
-    });
-
+    const gemini = new GeminiClient(this.env.GEMINI_API_KEY);
+    
     let parsed: Array<{ chunk_index: number; context: string }>;
     try {
-      const text = (response as any).output?.[0]?.content?.[0]?.text || (response as any).response || '';
-      const jsonMatch = text.match(/\[.*\]/s);
-      parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
+      parsed = await gemini.generateJSON<Array<{ chunk_index: number; context: string }>>(prompt, {
+        temperature: 0.4,
+        maxTokens: 2000,
+      });
     } catch (error) {
       console.error('Failed to parse contexts:', error);
       parsed = batch.map((_, idx) => ({

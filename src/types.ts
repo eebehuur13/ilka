@@ -6,6 +6,7 @@ export interface Env {
   QUEUE: Queue;
   AI: Ai;
   OPENAI_API_KEY: string;
+  GEMINI_API_KEY: string;
 }
 
 // Document types
@@ -210,6 +211,8 @@ export interface QueryRequest {
   query: string;
   user_id: string;
   methods?: RetrievalMethod[];
+  mode?: 'file-search' | 'model-only';
+  reasoning?: boolean;
   options?: {
     top_k?: number;
     temperature?: number;

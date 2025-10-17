@@ -1,4 +1,5 @@
 import type { Env, QueryAnalysis } from '../types';
+import { GeminiClient } from '../llm/gemini-client';
 
 export class QueryAnalyzer {
   constructor(private readonly env: Env) {}
@@ -45,45 +46,31 @@ Return ONLY valid JSON using snake_case for all fields:
   "sub_questions": null or ["...", "..."]
 }`;
 
-    const response = await this.env.AI.run('@cf/openai/gpt-oss-120b', {
-      input: [{ role: 'user', content: prompt }],
-      max_output_tokens: 1500,
-      temperature: 0.4
-    });
-
     try {
-      const text = (response as any).output?.[0]?.content?.[0]?.text || (response as any).response || '';
+      const gemini = new GeminiClient(this.env.GEMINI_API_KEY);
+      const parsed = await gemini.generateJSON<QueryAnalysis>(prompt, {
+        temperature: 0.3,
+        maxTokens: 1500,
+      });
       
-      if (!text) {
-        console.error('Analyzer: Empty response from LLM');
-        throw new Error('Empty response from LLM');
-      }
-      
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        console.error('Analyzer: No JSON found in response. Text sample:', text.substring(0, 300));
-        throw new Error('No JSON found in response');
-      }
-      
-      const parsed = JSON.parse(jsonMatch[0]);
       console.log('Analyzer: Successfully parsed, hypothetical_answer length:', (parsed.hypothetical_answer || '').length);
-      return parsed as QueryAnalysis;
-    } catch (error) {
+      return parsed;
+    } catch (error: any) {
       console.error('Analyzer: Failed to parse:', error.message);
       
       return {
-        intent: 'factual',
-        complexity: 'moderate',
-        target_type: 'general',
+        intent: 'factual' as const,
+        complexity: 'moderate' as const,
+        target_type: 'general' as const,
         target_document: null,
         synonyms: [],
         related_terms: [],
         rephrasings: [query],
         hypothetical_answer: '',
-        recommended_methods: ['bm25', 'vector'],
+        recommended_methods: ['bm25', 'vector'] as const,
         reasoning: 'Default analysis due to parse error',
         sub_questions: null
-      };
+      } as QueryAnalysis;
     }
   }
 }

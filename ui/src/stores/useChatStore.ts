@@ -6,10 +6,12 @@ interface ChatStore {
   currentConversationId: string | null
   messages: ChatMessage[]
   mode: ChatMode
+  reasoning: boolean
   isProcessing: boolean
   queryOptions: QueryOptions
   
   setMode: (mode: ChatMode) => void
+  setReasoning: (reasoning: boolean) => void
   addMessage: (message: ChatMessage) => void
   updateMessage: (id: string, updates: Partial<ChatMessage>) => void
   setIsProcessing: (processing: boolean) => void
@@ -24,10 +26,13 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   currentConversationId: null,
   messages: [],
   mode: 'file-search',
+  reasoning: false,
   isProcessing: false,
   queryOptions: {},
   
   setMode: (mode) => set({ mode }),
+  
+  setReasoning: (reasoning) => set({ reasoning }),
   
   addMessage: (message) => set((state) => ({
     messages: [...state.messages, message]

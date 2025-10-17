@@ -20,16 +20,16 @@ export class DocumentEmbedder {
       
       await this.vector.upsertBatch(
         batch.map(p => ({
-          id: p.id,
-          text: p.text,
-          contextText: p.context_text || '',
+          id: p.id as string,
+          text: p.text as string,
+          contextText: (p.context_text as string) || '',
           metadata: {
             document_id: documentId,
             file_name: doc.file_name as string,
-            passage_index: p.passage_index,
-            heading: p.heading,
-            start_line: p.start_line,
-            end_line: p.end_line
+            passage_index: p.passage_index as number,
+            heading: p.heading as string | null,
+            start_line: p.start_line as number,
+            end_line: p.end_line as number
           }
         })),
         `user-${userId}`

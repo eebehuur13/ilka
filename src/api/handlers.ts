@@ -1,4 +1,4 @@
-import type { Env, UploadRequest, QueryRequest, QueryResponse } from '../types';
+import type { Env, UploadRequest, QueryRequest, QueryResponse, QueryAnalysis, RetrievalMethod } from '../types';
 import { QueryAnalyzer } from '../query/analyzer';
 import { Router } from '../query/router';
 import { Method1BM25Direct } from '../methods/method1-bm25-direct';
@@ -7,6 +7,7 @@ import { Method3VectorAgents } from '../methods/method3-vector-agents';
 import { Method4HydeAgents } from '../methods/method4-hyde-agents';
 import { MethodSummary } from '../methods/method-summary';
 import { VectorRetriever } from '../retrieval/vector';
+import { GeminiClient } from '../llm/gemini-client';
 
 export async function handleUpload(request: Request, env: Env): Promise<Response> {
   try {
@@ -50,7 +51,7 @@ export async function handleUpload(request: Request, env: Env): Promise<Response
 export async function handleQueryStream(request: Request, env: Env): Promise<Response> {
   try {
     const body: QueryRequest = await request.json();
-    const { query, user_id, mode } = body;
+    const { query, user_id, mode, reasoning = false } = body;
 
     if (!query || !user_id) {
       return jsonResponse({ error: 'Missing query or user_id' }, 400);
@@ -75,16 +76,16 @@ export async function handleQueryStream(request: Request, env: Env): Promise<Res
             analysis = {
               intent: 'factual' as const,
               complexity: 'moderate' as const,
-              target_type: 'general',
+              target_type: 'general' as const,
               target_document: null,
               synonyms: [],
               related_terms: [],
               rephrasings: [query],
               hypothetical_answer: '',
-              recommended_methods: ['bm25', 'vector'],
+              recommended_methods: ['bm25', 'vector'] as const,
               reasoning: 'Using fallback due to analyzer error',
               sub_questions: null
-            };
+            } as QueryAnalysis;
           }
 
           // Send analysis complete
@@ -101,7 +102,7 @@ export async function handleQueryStream(request: Request, env: Env): Promise<Res
           const methods = router.route(analysis);
           
           const expandedMethods = methods.flatMap(method => 
-            method === 'all' ? ['bm25', 'vector', 'hyde'] : [method]
+            (method as string) === 'all' ? ['bm25', 'vector', 'hyde'] as RetrievalMethod[] : [method]
           );
 
           // Send methods planned
@@ -165,7 +166,7 @@ export async function handleQueryStream(request: Request, env: Env): Promise<Res
                   `data: ${JSON.stringify({ 
                     type: 'method_error', 
                     method,
-                    error: error.message 
+                    error: (error as Error).message 
                   })}\n\n`
                 )
               );
@@ -204,164 +205,46 @@ export async function handleQueryStream(request: Request, env: Env): Promise<Res
           return;
         }
 
-        // Handle model-only mode
-        const systemPrompt = `You are a helpful assistant. Always structure your response in two clear sections:
+        // Handle model-only mode with Gemini
+        const gemini = new GeminiClient(env.GEMINI_API_KEY);
+        
+        // Configure thinking based on reasoning toggle
+        const thinkingBudget = reasoning ? -1 : 0; // -1 = dynamic, 0 = disabled
 
-THINKING:
-[Write your step-by-step reasoning and analysis here. Show your thought process.]
-
-ANSWER:
-[Write your final, concise answer here.]
-
-Always use exactly these section headers: "THINKING:" and "ANSWER:"`;
-
-        // Use QwQ-32B - real reasoning model with chain-of-thought
-        const response = await env.AI.run('@cf/qwen/qwq-32b', {
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: query }
-          ],
-          stream: true,
-          max_tokens: 2000,
-          temperature: 0.7
-        });
-
-        let buffer = '';
-        let currentSection: 'thinking' | 'answer' | 'initial' = 'initial';
-        let thinkingComplete = false;
-
-        // Check if response is a ReadableStream
-        if (response instanceof ReadableStream) {
-          const reader = response.getReader();
-          const decoder = new TextDecoder();
-          let sseBuffer = '';
-          
-          try {
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
-              
-              // Llama returns SSE format - parse it
-              const chunk = decoder.decode(value, { stream: true });
-              sseBuffer += chunk;
-              
-              // Process complete SSE messages
-              const lines = sseBuffer.split('\n');
-              sseBuffer = lines.pop() || ''; // Keep incomplete line
-              
-              for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                  const data = line.slice(6);
-                  if (data === '[DONE]') continue;
-                  
-                  try {
-                    const parsed = JSON.parse(data);
-                    const text = parsed.response || '';
-                    if (!text) continue;
-                    
-                    buffer += text;
-
-                    // Detect ANSWER: transition
-                    if (!thinkingComplete && buffer.includes('ANSWER:')) {
-                      const parts = buffer.split('ANSWER:');
-                      const thinkingText = parts[0].replace('THINKING:', '').trim();
-                      
-                      // Send complete thinking section
-                      await writer.write(
-                        encoder.encode(
-                          `data: ${JSON.stringify({ 
-                            type: 'thinking_complete', 
-                            text: thinkingText 
-                          })}\n\n`
-                        )
-                      );
-                      
-                      thinkingComplete = true;
-                      currentSection = 'answer';
-                      buffer = parts[1] || '';
-                      
-                      // Send start of answer
-                      if (buffer) {
-                        await writer.write(
-                          encoder.encode(
-                            `data: ${JSON.stringify({ 
-                              type: 'answer', 
-                              text: buffer 
-                            })}\n\n`
-                          )
-                        );
-                      }
-                      continue;
-                    }
-
-                    // Stream current section
-                    if (currentSection === 'initial' && text) {
-                      // Still in thinking section
-                      await writer.write(
-                        encoder.encode(
-                          `data: ${JSON.stringify({ 
-                            type: 'thinking', 
-                            text: text 
-                          })}\n\n`
-                        )
-                      );
-                    } else if (currentSection === 'answer' && text) {
-                      // Streaming answer
-                      await writer.write(
-                        encoder.encode(
-                          `data: ${JSON.stringify({ 
-                            type: 'answer', 
-                            text: text 
-                          })}\n\n`
-                        )
-                      );
-                    }
-                  } catch (parseError) {
-                    // Skip unparseable SSE data
-                    continue;
-                  }
-                }
-              }
-            }
-          } catch (streamError) {
-            console.error('ReadableStream error:', streamError);
-            throw streamError;
-          }
-        } else {
-          // Fallback: Not a ReadableStream, try async iteration
-          for await (const chunk of response as any) {
-            // Llama 3.1 streaming format
-            const text = chunk.response || '';
-            if (!text) continue;
-            buffer += text;
-
-            // Same logic as above for ANSWER: detection and streaming
-            if (!thinkingComplete && buffer.includes('ANSWER:')) {
-              const parts = buffer.split('ANSWER:');
-              const thinkingText = parts[0].replace('THINKING:', '').trim();
-              await writer.write(encoder.encode(`data: ${JSON.stringify({ type: 'thinking_complete', text: thinkingText })}\n\n`));
-              thinkingComplete = true;
-              currentSection = 'answer';
-              buffer = parts[1] || '';
-              if (buffer) await writer.write(encoder.encode(`data: ${JSON.stringify({ type: 'answer', text: buffer })}\n\n`));
-              continue;
-            }
-
-            if (currentSection === 'initial' && text) {
-              await writer.write(encoder.encode(`data: ${JSON.stringify({ type: 'thinking', text })}\n\n`));
-            } else if (currentSection === 'answer' && text) {
-              await writer.write(encoder.encode(`data: ${JSON.stringify({ type: 'answer', text })}\n\n`));
+        try {
+          for await (const chunk of gemini.streamContent(query, {
+            thinkingBudget,
+            includeThoughts: reasoning,
+            temperature: 0.7,
+            maxTokens: 2000,
+          })) {
+            if (chunk.type === 'thinking') {
+              await writer.write(
+                encoder.encode(
+                  `data: ${JSON.stringify({ 
+                    type: 'thinking', 
+                    text: chunk.content 
+                  })}\n\n`
+                )
+              );
+            } else {
+              await writer.write(
+                encoder.encode(
+                  `data: ${JSON.stringify({ 
+                    type: 'answer', 
+                    text: chunk.content 
+                  })}\n\n`
+                )
+              );
             }
           }
-        }
-
-        // If we never found ANSWER:, treat everything as answer
-        if (!thinkingComplete && buffer) {
+        } catch (geminiError) {
+          console.error('Gemini streaming error:', geminiError);
           await writer.write(
             encoder.encode(
               `data: ${JSON.stringify({ 
-                type: 'answer', 
-                text: buffer 
+                type: 'error', 
+                message: 'Failed to generate response' 
               })}\n\n`
             )
           );
@@ -408,7 +291,7 @@ Always use exactly these section headers: "THINKING:" and "ANSWER:"`;
 export async function handleQuery(request: Request, env: Env): Promise<Response> {
   try {
     const body: QueryRequest = await request.json();
-    const { query, user_id, methods: requestedMethods, mode } = body;
+    const { query, user_id, methods: requestedMethods, mode, reasoning = false } = body;
 
     if (!query || !user_id) {
       return jsonResponse({ error: 'Missing query or user_id' }, 400);
@@ -416,25 +299,28 @@ export async function handleQuery(request: Request, env: Env): Promise<Response>
 
     const startTime = Date.now();
 
-    // Handle model-only mode: Skip all retrieval, just use LLM
+    // Handle model-only mode: Skip all retrieval, just use Gemini
     if (mode === 'model-only') {
-      const response = await env.AI.run('@cf/qwen/qwq-32b', {
-        messages: [{ role: 'user', content: query }],
-        max_tokens: 2000,
-        temperature: 0.7
+      const gemini = new GeminiClient(env.GEMINI_API_KEY);
+      const thinkingBudget = reasoning ? -1 : 0;
+      
+      const result = await gemini.generateContent(query, {
+        thinkingBudget,
+        includeThoughts: reasoning,
+        temperature: 0.7,
+        maxTokens: 2000,
       });
-
-      const text = (response as any).response || '';
 
       return jsonResponse({
         query,
         analysis: null,
         answers: [{
           method: 'model-only',
-          text,
+          text: result.answer,
           citations: [],
           confidence: 'high' as const,
-          latency_ms: Date.now() - startTime
+          latency_ms: Date.now() - startTime,
+          metadata: reasoning && result.thinking ? { thinking: result.thinking } : undefined
         }],
         total_latency_ms: Date.now() - startTime
       });
@@ -449,7 +335,7 @@ export async function handleQuery(request: Request, env: Env): Promise<Response>
 
     // Handle 'all' method - expand to all available methods
     const expandedMethods = methods.flatMap(method => 
-      method === 'all' ? ['bm25', 'vector', 'hyde'] : [method]
+      (method as string) === 'all' ? ['bm25', 'vector', 'hyde'] as RetrievalMethod[] : [method]
     );
 
     const results = await Promise.all(

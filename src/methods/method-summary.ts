@@ -1,4 +1,5 @@
 import type { Env, Answer, QueryAnalysis } from '../types';
+import { GeminiClient } from '../llm/gemini-client';
 import { truncateToTokenLimit } from '../utils/tokenizer';
 
 export class MethodSummary {
@@ -68,10 +69,10 @@ export class MethodSummary {
 
         if (existingSummary && existingSummary.summary_text) {
           return {
-            file_name: doc.file_name,
-            summary: existingSummary.summary_text,
-            document_id: doc.id,
-            confidence: 'high',
+            file_name: doc.file_name as string,
+            summary: existingSummary.summary_text as string,
+            document_id: doc.id as string,
+            confidence: 'high' as const,
             from_db: true
           };
         }
@@ -79,10 +80,10 @@ export class MethodSummary {
         // No pre-generated summary, create one on-the-fly
         const summary = await this.generateSummary(doc);
         return {
-          file_name: doc.file_name,
+          file_name: doc.file_name as string,
           summary,
-          document_id: doc.id,
-          confidence: 'medium',
+          document_id: doc.id as string,
+          confidence: 'medium' as const,
           from_db: false
         };
       })
@@ -156,20 +157,21 @@ Include:
 Write factually, third-person.`;
 
     try {
-      const response = await this.env.AI.run('@cf/openai/gpt-oss-120b', {
-        input: [{ role: 'user', content: prompt }],
-        max_output_tokens: 2000,
-        temperature: 0.3
+      const gemini = new GeminiClient(this.env.GEMINI_API_KEY);
+      const result = await gemini.generateContent(prompt, {
+        temperature: 0.3,
+        maxTokens: 2000,
+        thinkingBudget: 0,
       });
 
-      const summary = (response as any).output?.[0]?.content?.[0]?.text || (response as any).response || '';
+      const summary = result.answer;
       
       if (!summary) {
         return '*Failed to generate summary: empty response from AI.*';
       }
 
       return summary;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Summary generation error:', error);
       return `*Failed to generate summary: ${error.message}*`;
     }

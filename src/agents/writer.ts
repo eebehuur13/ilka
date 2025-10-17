@@ -1,4 +1,5 @@
 import type { Env, ScoredPassage, Answer } from '../types';
+import { GeminiClient } from '../llm/gemini-client';
 
 export class WriterAgent {
   constructor(private readonly env: Env) {}
@@ -30,16 +31,14 @@ ${evidenceBlocks}
 
 Provide a well-cited answer:`;
 
-    const response = await this.env.AI.run('@cf/openai/gpt-oss-120b', {
-      input: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: prompt }
-      ],
-      max_output_tokens: 1500,
-      temperature: 0.15
+    const gemini = new GeminiClient(this.env.GEMINI_API_KEY);
+    const result = await gemini.generateContent(`${systemPrompt}\n\n${prompt}`, {
+      temperature: 0.15,
+      maxTokens: 1500,
+      thinkingBudget: 0,
     });
 
-    const answerText = (response as any).output?.[0]?.content?.[0]?.text || (response as any).response || '';
+    const answerText = result.answer;
     const citations = this.extractCitations(answerText, passages);
 
     return {

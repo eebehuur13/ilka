@@ -15,7 +15,7 @@ interface ChatInputProps {
 
 export const ChatInput = ({ suggestedQuery }: ChatInputProps) => {
   const [input, setInput] = useState('')
-  const { mode, isProcessing, setIsProcessing, addMessage } = useChatStore()
+  const { mode, reasoning, isProcessing, setIsProcessing, addMessage } = useChatStore()
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   // Handle suggested query from related terms
@@ -175,7 +175,8 @@ export const ChatInput = ({ suggestedQuery }: ChatInputProps) => {
               isStreaming: false 
             })
           },
-          mode
+          mode,
+          reasoning
         )
       } else {
         // Non-streaming file-search mode

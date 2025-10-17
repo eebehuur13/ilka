@@ -36,11 +36,11 @@ export class Reranker {
 
     try {
       const response = await this.ai.run('@cf/baai/bge-reranker-base', {
-        query,
-        texts: passages.map(p => p.text.substring(0, 512))
-      });
+        text: query,
+        source_sentences: passages.map(p => p.text.substring(0, 512))
+      } as any);
 
-      const scores = (response as any).data;
+      const scores = (response as any).data as number[];
 
       return passages.map((passage, idx) => ({
         ...passage,
@@ -72,13 +72,13 @@ export class Reranker {
         throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`)
       }
       
-      const data = await response.json()
+      const data = await response.json() as any
       
       if (!data.data || !data.data[0] || !data.data[0].embedding) {
         throw new Error('Invalid response from OpenAI API: missing embedding data')
       }
       
-      return data.data[0].embedding
+      return data.data[0].embedding as number[]
     } catch (error) {
       console.error('Reranker embedding error:', error)
       throw new Error(`Failed to generate embedding for reranking: ${error instanceof Error ? error.message : 'Unknown error'}`)
@@ -104,7 +104,7 @@ export class Reranker {
         throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`)
       }
       
-      const data = await response.json()
+      const data = await response.json() as any
       
       if (!data.data || !Array.isArray(data.data)) {
         throw new Error('Invalid response from OpenAI API: missing embedding data array')
@@ -114,7 +114,7 @@ export class Reranker {
         if (!item.embedding) {
           throw new Error('Invalid response from OpenAI API: missing embedding in item')
         }
-        return item.embedding
+        return item.embedding as number[]
       })
     } catch (error) {
       console.error('Reranker batch embedding error:', error)

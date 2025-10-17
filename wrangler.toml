@@ -29,7 +29,9 @@ max_retries = 3
 [ai]
 binding = "AI"
 
-# Add your OpenAI API key as a secret:
+# Add API keys as secrets:
 # wrangler secret put OPENAI_API_KEY
+# wrangler secret put GEMINI_API_KEY
 # Secrets (set via CLI):
-# - OPENAI_API_KEY
+# - OPENAI_API_KEY (for embeddings)
+# - GEMINI_API_KEY (for text generation)

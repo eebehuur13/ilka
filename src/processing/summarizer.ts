@@ -1,4 +1,5 @@
 import type { Env } from '../types';
+import { GeminiClient } from '../llm/gemini-client';
 import { truncateToTokenLimit } from '../utils/tokenizer';
 
 export class DocumentSummarizer {
@@ -10,7 +11,7 @@ export class DocumentSummarizer {
       throw new Error(`Document ${documentId} not found or has no text`);
     }
 
-    const textToSummarize = truncateToTokenLimit(doc.full_text, 50000);
+    const textToSummarize = truncateToTokenLimit(doc.full_text as string, 50000);
 
     const prompt = `Summarize this document comprehensively in 500-1000 words.
 
@@ -25,13 +26,14 @@ Include:
 
 Write factually, third-person.`;
 
-    const response = await this.env.AI.run('@cf/openai/gpt-oss-120b', {
-      input: [{ role: 'user', content: prompt }],
-      max_output_tokens: 2000,
-      temperature: 0.3
+    const gemini = new GeminiClient(this.env.GEMINI_API_KEY);
+    const result = await gemini.generateContent(prompt, {
+      temperature: 0.3,
+      maxTokens: 2000,
+      thinkingBudget: 0,
     });
 
-    const summary = (response as any).output?.[0]?.content?.[0]?.text || (response as any).response || '';
+    const summary = result.answer;
 
     const summaryId = `${documentId}-summary`;
     await this.env.DB
@@ -60,17 +62,14 @@ Focus on:
 
 Return ONLY a JSON array: ["keyword1", "keyword2", ...]`;
 
-    const response = await this.env.AI.run('@cf/openai/gpt-oss-120b', {
-      input: [{ role: 'user', content: prompt }],
-      max_output_tokens: 500,
-      temperature: 0.3
-    });
-
+    const gemini = new GeminiClient(this.env.GEMINI_API_KEY);
+    
     let keywords: string[];
     try {
-      const text = (response as any).output?.[0]?.content?.[0]?.text || (response as any).response || '';
-      const jsonMatch = text.match(/\[.*\]/s);
-      keywords = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
+      keywords = await gemini.generateJSON<string[]>(prompt, {
+        temperature: 0.3,
+        maxTokens: 500,
+      });
     } catch (error) {
       console.error('Failed to parse keywords:', error);
       keywords = [];

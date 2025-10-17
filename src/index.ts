@@ -1,4 +1,4 @@
-import type { Env } from './types';
+import type { Env, QueueMessage } from './types';
 import {
   handleUpload,
   handleQuery,
@@ -76,7 +76,7 @@ export default {
     }
   },
 
-  async queue(batch: MessageBatch, env: Env): Promise<void> {
+  async queue(batch: MessageBatch<QueueMessage>, env: Env): Promise<void> {
     await handleQueueMessage(batch, env);
   }
 };
