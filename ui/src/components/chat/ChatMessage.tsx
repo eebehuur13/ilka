@@ -1,21 +1,36 @@
-import { User, Brain, ChevronDown } from 'lucide-react'
+import { User, Brain, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import type { ChatMessage as ChatMessageType } from '@/types'
 import { Logo } from '@/components/common/Logo'
 import { formatTime } from '@/lib/utils'
-import { MethodBadge } from './MethodBadge'
 import { CitationCard } from './CitationCard'
+import { AnalyzerInsights } from './AnalyzerInsights'
 import { Button } from '@/components/ui/button'
 import { Copy, RefreshCw, ThumbsUp, ThumbsDown } from 'lucide-react'
 
 interface ChatMessageProps {
   message: ChatMessageType
+  onRegenerate?: () => void
+  onRelatedTermClick?: (term: string) => void
 }
 
-export const ChatMessage = ({ message }: ChatMessageProps) => {
+export const ChatMessage = ({ message, onRegenerate, onRelatedTermClick }: ChatMessageProps) => {
   const isUser = message.role === 'user'
   const [showThinking, setShowThinking] = useState(false)
+  const [currentAnswerIndex, setCurrentAnswerIndex] = useState(0)
+  const [copied, setCopied] = useState(false)
+
+  const currentAnswer = message.allAnswers?.[currentAnswerIndex]
+  const totalAnswers = message.allAnswers?.length || 0
+  const hasMultipleAnswers = totalAnswers > 1
+
+  const handleCopy = () => {
+    const textToCopy = hasMultipleAnswers ? (currentAnswer?.answer || '') : message.content
+    navigator.clipboard.writeText(textToCopy)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
 
   if (isUser) {
     return (
@@ -49,11 +64,65 @@ export const ChatMessage = ({ message }: ChatMessageProps) => {
           <span className="text-xs text-gray-500">{formatTime(message.timestamp)}</span>
         </div>
 
-        {message.method && message.method.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {message.method.map((m, idx) => (
-              <MethodBadge key={idx} method={m} />
-            ))}
+        {message.analysis && (
+          <AnalyzerInsights 
+            analysis={message.analysis} 
+            onRelatedTermClick={onRelatedTermClick}
+          />
+        )}
+
+        {(hasMultipleAnswers || (message.method && message.method.length > 0)) && (
+          <div className="flex items-center justify-between p-2 bg-gray-50 rounded-md border border-gray-200">
+            <div className="flex items-center gap-2 text-xs">
+              <span className="font-medium">{hasMultipleAnswers ? (currentAnswer?.label || 'Method') : (message.method?.[0]?.label || 'Method')}</span>
+              {(hasMultipleAnswers ? currentAnswer?.status : message.method?.[0]?.status) === 'pending' && (
+                <span className="text-gray-500">⏳ Loading...</span>
+              )}
+              {(hasMultipleAnswers ? currentAnswer?.status : message.method?.[0]?.status) !== 'pending' && (
+                <>
+                  <span>•</span>
+                  <span className={`px-2 py-0.5 rounded ${
+                    (hasMultipleAnswers ? currentAnswer?.confidence : message.method?.[0]?.confidence) === 'high' ? 'bg-green-100 text-green-800' :
+                    (hasMultipleAnswers ? currentAnswer?.confidence : message.method?.[0]?.confidence) === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                    'bg-gray-100 text-gray-800'
+                  }`}>
+                    {(hasMultipleAnswers ? currentAnswer?.confidence : message.method?.[0]?.confidence) || 'unknown'} confidence
+                  </span>
+                  <span>•</span>
+                  <span className="text-gray-600">{(hasMultipleAnswers ? currentAnswer?.citations?.length : message.method?.[0]?.citations?.length) || 0} sources</span>
+                  <span>•</span>
+                  <span className="text-gray-500">{(hasMultipleAnswers ? currentAnswer?.latency_ms : message.method?.[0]?.latency_ms) || 0}ms</span>
+                </>
+              )}
+            </div>
+            
+            {hasMultipleAnswers && (
+              <div className="flex items-center gap-2">
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => setCurrentAnswerIndex(i => Math.max(0, i - 1))}
+                  disabled={currentAnswerIndex === 0}
+                  className="h-7 w-7 p-0"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                
+                <span className="text-xs text-gray-500 min-w-[3rem] text-center">
+                  {currentAnswerIndex + 1} of {totalAnswers}
+                </span>
+                
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => setCurrentAnswerIndex(i => Math.min(totalAnswers - 1, i + 1))}
+                  disabled={currentAnswerIndex === totalAnswers - 1}
+                  className="h-7 w-7 p-0"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+            )}
           </div>
         )}
 
@@ -83,37 +152,31 @@ export const ChatMessage = ({ message }: ChatMessageProps) => {
         )}
 
         <div className="prose prose-sm max-w-none">
-          <ReactMarkdown>{message.content}</ReactMarkdown>
+          <ReactMarkdown>{hasMultipleAnswers ? (currentAnswer?.answer || '') : message.content}</ReactMarkdown>
           {message.isStreaming && <span className="inline-block w-2 h-4 ml-1 bg-gray-900 animate-pulse" />}
         </div>
 
-        {message.method && message.method.some(m => m.citations && m.citations.length > 0) && (
+        {hasMultipleAnswers && currentAnswer?.citations && currentAnswer.citations.length > 0 && (
+          <CitationCard citations={currentAnswer.citations} />
+        )}
+
+        {!hasMultipleAnswers && message.method && message.method.some(m => m.citations && m.citations.length > 0) && (
           <CitationCard 
             citations={message.method.flatMap(m => m.citations || [])} 
           />
         )}
 
-        {message.method && message.method.length > 0 && (
-          <div className="flex items-center gap-2 text-xs text-gray-500 p-2 bg-gray-50 rounded-md">
-            <span>⚡ {message.method.length} methods</span>
-            <span>·</span>
-            <span>
-              {message.method.reduce((sum, m) => sum + (m.citations?.length || 0), 0)} sources
-            </span>
-            <span>·</span>
-            <span>High confidence</span>
-          </div>
-        )}
-
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm">
+          <Button variant="ghost" size="sm" onClick={handleCopy}>
             <Copy className="w-4 h-4 mr-1" />
-            Copy
+            {copied ? 'Copied!' : 'Copy'}
           </Button>
-          <Button variant="ghost" size="sm">
-            <RefreshCw className="w-4 h-4 mr-1" />
-            Regenerate
-          </Button>
+          {onRegenerate && (
+            <Button variant="ghost" size="sm" onClick={onRegenerate}>
+              <RefreshCw className="w-4 h-4 mr-1" />
+              Regenerate
+            </Button>
+          )}
           <Button variant="ghost" size="icon" className="h-8 w-8">
             <ThumbsUp className="w-4 h-4" />
           </Button>

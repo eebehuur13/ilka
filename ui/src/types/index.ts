@@ -28,8 +28,19 @@ export interface ChatMessage {
   content: string
   timestamp: Date
   method?: MethodResult[]
+  allAnswers?: MethodResult[]
+  analysis?: QueryAnalysis
   thinking?: string
   isStreaming?: boolean
+}
+
+export interface QueryAnalysis {
+  complexity: 'simple' | 'moderate' | 'complex'
+  intent: 'factual' | 'analytical' | 'comparison' | 'summary'
+  target_type?: string
+  synonyms?: string[]
+  related_terms?: string[]
+  recommended_methods?: RetrievalMethod[]
 }
 
 export interface MethodResult {

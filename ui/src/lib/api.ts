@@ -47,16 +47,23 @@ export const getDocumentStatus = async (documentId: string): Promise<Document> =
 }
 
 export interface StreamEvent {
-  type: 'thinking' | 'thinking_complete' | 'answer' | 'done' | 'error'
+  type: 'thinking' | 'thinking_complete' | 'answer' | 'done' | 'error' | 
+        'analysis_complete' | 'methods_planned' | 'method_complete' | 'method_error'
   text?: string
   message?: string
+  analysis?: any
+  methods?: string[]
+  method?: string
+  answer?: any
+  error?: string
 }
 
 export const queryDocumentsStream = async (
   query: string,
   userId: string,
   onEvent: (event: StreamEvent) => void,
-  onError?: (error: Error) => void
+  onError?: (error: Error) => void,
+  mode: 'model-only' | 'file-search' = 'model-only'
 ) => {
   try {
     const response = await fetch(`${API_BASE_URL}/query/stream`, {
@@ -67,7 +74,7 @@ export const queryDocumentsStream = async (
       body: JSON.stringify({
         query,
         user_id: userId,
-        mode: 'model-only'
+        mode
       })
     })
 

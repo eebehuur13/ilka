@@ -5,6 +5,7 @@ import { Method1BM25Direct } from '../methods/method1-bm25-direct';
 import { Method2BM25Agents } from '../methods/method2-bm25-agents';
 import { Method3VectorAgents } from '../methods/method3-vector-agents';
 import { Method4HydeAgents } from '../methods/method4-hyde-agents';
+import { MethodSummary } from '../methods/method-summary';
 import { VectorRetriever } from '../retrieval/vector';
 
 export async function handleUpload(request: Request, env: Env): Promise<Response> {
@@ -54,11 +55,6 @@ export async function handleQueryStream(request: Request, env: Env): Promise<Res
       return jsonResponse({ error: 'Missing query or user_id' }, 400);
     }
 
-    // Only support model-only mode for streaming
-    if (mode !== 'model-only') {
-      return jsonResponse({ error: 'Streaming only supports model-only mode' }, 400);
-    }
-
     const { readable, writable } = new TransformStream();
     const writer = writable.getWriter();
     const encoder = new TextEncoder();
@@ -66,6 +62,148 @@ export async function handleQueryStream(request: Request, env: Env): Promise<Res
     // Start streaming response in background
     (async () => {
       try {
+        // Handle file-search mode
+        if (mode === 'file-search') {
+          let analysis;
+          try {
+            const analyzer = new QueryAnalyzer(env);
+            analysis = await analyzer.analyze(query);
+          } catch (error) {
+            console.error('Analyzer failed:', error);
+            // Use fallback analysis
+            analysis = {
+              intent: 'factual' as const,
+              complexity: 'moderate' as const,
+              target_type: 'general',
+              target_document: null,
+              synonyms: [],
+              related_terms: [],
+              rephrasings: [query],
+              hypothetical_answer: '',
+              recommended_methods: ['bm25', 'vector'],
+              reasoning: 'Using fallback due to analyzer error',
+              sub_questions: null
+            };
+          }
+
+          // Send analysis complete
+          await writer.write(
+            encoder.encode(
+              `data: ${JSON.stringify({ 
+                type: 'analysis_complete', 
+                analysis 
+              })}\n\n`
+            )
+          );
+
+          const router = new Router();
+          const methods = router.route(analysis);
+          
+          const expandedMethods = methods.flatMap(method => 
+            method === 'all' ? ['bm25', 'vector', 'hyde'] : [method]
+          );
+
+          // Send methods planned
+          await writer.write(
+            encoder.encode(
+              `data: ${JSON.stringify({ 
+                type: 'methods_planned', 
+                methods: expandedMethods 
+              })}\n\n`
+            )
+          );
+
+          // Execute methods progressively
+          const methodExecutors = expandedMethods.map(async (method) => {
+            const startTime = Date.now();
+            try {
+              let result = null;
+              
+              switch (method) {
+                case 'bm25':
+                  const method1 = new Method1BM25Direct(env);
+                  result = await method1.execute(query, analysis, user_id);
+                  break;
+                
+                case 'vector':
+                  const method3 = new Method3VectorAgents(env);
+                  result = await method3.execute(query, analysis, user_id);
+                  break;
+                
+                case 'hyde':
+                  const method4 = new Method4HydeAgents(env);
+                  result = await method4.execute(query, analysis, user_id);
+                  break;
+                
+                case 'summary':
+                  const summaryMethod = new MethodSummary(env);
+                  result = await summaryMethod.execute(query, analysis, user_id);
+                  break;
+                
+                default:
+                  console.warn('Unknown retrieval method:', method);
+                  return;
+              }
+
+              if (result) {
+                // Stream method completion
+                await writer.write(
+                  encoder.encode(
+                    `data: ${JSON.stringify({ 
+                      type: 'method_complete', 
+                      method: result.method,
+                      answer: result
+                    })}\n\n`
+                  )
+                );
+              }
+            } catch (error) {
+              console.error(`Method ${method} failed:`, error);
+              await writer.write(
+                encoder.encode(
+                  `data: ${JSON.stringify({ 
+                    type: 'method_error', 
+                    method,
+                    error: error.message 
+                  })}\n\n`
+                )
+              );
+            }
+          });
+
+          // Wait for all methods to complete
+          await Promise.allSettled(methodExecutors);
+
+          // Add Method2 BM25 Agents if bm25 was used
+          if (expandedMethods.includes('bm25')) {
+            try {
+              const method2 = new Method2BM25Agents(env);
+              const agentAnswer = await method2.execute(query, analysis, user_id);
+              await writer.write(
+                encoder.encode(
+                  `data: ${JSON.stringify({ 
+                    type: 'method_complete', 
+                    method: agentAnswer.method,
+                    answer: agentAnswer
+                  })}\n\n`
+                )
+              );
+            } catch (error) {
+              console.error('Method2 BM25 Agents failed:', error);
+            }
+          }
+
+          // Send completion
+          await writer.write(
+            encoder.encode(
+              `data: ${JSON.stringify({ type: 'done' })}\n\n`
+            )
+          );
+
+          return;
+        }
+
+        // Handle model-only mode
         const systemPrompt = `You are a helpful assistant. Always structure your response in two clear sections:
 
 THINKING:
@@ -329,9 +467,7 @@ export async function handleQuery(request: Request, env: Env): Promise<Response>
             return await method4.execute(query, analysis, user_id);
           
           case 'summary':
-            // TODO: Implement document summary method
-            // For now, fall back to BM25 direct
-            const summaryMethod = new Method1BM25Direct(env);
+            const summaryMethod = new MethodSummary(env);
             return await summaryMethod.execute(query, analysis, user_id);
           
           default:

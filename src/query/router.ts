@@ -4,12 +4,13 @@ export class Router {
   route(analysis: QueryAnalysis): RetrievalMethod[] {
     const { complexity, intent, target_type } = analysis;
 
-    if (complexity === 'simple' && intent === 'factual') {
-      return ['bm25'];
+    // Check analyzer recommendations FIRST
+    if (analysis.recommended_methods && analysis.recommended_methods.length > 0) {
+      return analysis.recommended_methods;
     }
 
-    if (target_type === 'specific_doc' && intent === 'summary') {
-      return ['summary'];
+    if (complexity === 'simple' && intent === 'factual') {
+      return ['bm25'];
     }
 
     if (complexity === 'moderate') {
@@ -18,10 +19,6 @@ export class Router {
 
     if (complexity === 'complex' || intent === 'analytical' || intent === 'comparison') {
       return ['bm25', 'vector', 'hyde'];
-    }
-
-    if (analysis.recommended_methods && analysis.recommended_methods.length > 0) {
-      return analysis.recommended_methods;
     }
 
     return ['bm25', 'vector'];
