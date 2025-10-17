@@ -266,7 +266,7 @@ export const ChatInput = ({ suggestedQuery }: ChatInputProps) => {
   ]
 
   return (
-    <div className="border-t border-gray-200 bg-white p-3 md:p-4 safe-area-inset-bottom">
+    <div className="border-t border-gray-200 bg-white p-3 md:p-4 mb-2 md:mb-3">
       <div className="max-w-3xl mx-auto">
         <div className="space-y-2">
           {/* Model Selector - Only show in model-only mode */}
