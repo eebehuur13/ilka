@@ -1,6 +1,7 @@
 import { User, Brain, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import type { ChatMessage as ChatMessageType } from '@/types'
 import { Logo } from '@/components/common/Logo'
 import { formatTime } from '@/lib/utils'
@@ -153,6 +154,7 @@ export const ChatMessage = ({ message, onRegenerate, onRelatedTermClick }: ChatM
 
         <div className="prose prose-sm max-w-none">
           <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
             components={{
               p: ({children}) => <p className="mb-4 leading-relaxed last:mb-0">{children}</p>,
               h1: ({children}) => <h1 className="text-xl font-bold mt-6 mb-3 first:mt-0">{children}</h1>,
