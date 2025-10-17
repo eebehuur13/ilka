@@ -85,9 +85,11 @@ export const ChatInput = ({ suggestedQuery }: ChatInputProps) => {
             if (mode === 'model-only') {
               // Handle model-only streaming
               if (event.type === 'thinking') {
+                console.log('[DEBUG] Received thinking event:', event.text?.substring(0, 50))
                 thinking += event.text || ''
                 updateMessage(aiMessageId, { thinking, isStreaming: true })
               } else if (event.type === 'thinking_complete') {
+                console.log('[DEBUG] Thinking complete:', event.text?.substring(0, 50))
                 thinking = event.text || ''
                 updateMessage(aiMessageId, { thinking, isStreaming: true })
               } else if (event.type === 'answer') {
@@ -264,7 +266,7 @@ export const ChatInput = ({ suggestedQuery }: ChatInputProps) => {
   ]
 
   return (
-    <div className="border-t border-gray-200 bg-white p-3 md:p-4 pb-safe">
+    <div className="border-t border-gray-200 bg-white p-3 md:p-4 safe-area-inset-bottom">
       <div className="max-w-3xl mx-auto">
         <div className="space-y-2">
           {/* Model Selector - Only show in model-only mode */}
@@ -310,9 +312,6 @@ export const ChatInput = ({ suggestedQuery }: ChatInputProps) => {
             </Button>
           </div>
         </div>
-        <p className="text-xs text-gray-500 text-center mt-2">
-          Zyn may produce inaccurate information. Always verify important facts.
-        </p>
       </div>
     </div>
   )

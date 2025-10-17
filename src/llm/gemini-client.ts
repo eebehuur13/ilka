@@ -56,7 +56,17 @@ export class GeminiClient {
       for (const part of candidate.content.parts) {
         if (!part.text) continue;
 
-        if (part.thought) {
+        // Check if this part is thinking/reasoning
+        // Gemini uses 'thought' field or metadata to indicate thinking parts
+        const isThinking = (part as any).thought === true || (part as any).metadata?.type === 'thinking';
+        
+        console.log('[DEBUG] Gemini chunk:', { 
+          hasThought: (part as any).thought,
+          metadata: (part as any).metadata,
+          textPreview: part.text?.substring(0, 50)
+        });
+
+        if (isThinking) {
           yield { type: 'thinking', content: part.text };
         } else {
           yield { type: 'answer', content: part.text };
@@ -101,7 +111,9 @@ export class GeminiClient {
     for (const part of candidate.content.parts) {
       if (!part.text) continue;
       
-      if (part.thought) {
+      const isThinking = (part as any).thought === true || (part as any).metadata?.type === 'thinking';
+      
+      if (isThinking) {
         thinking += part.text;
       } else {
         answer += part.text;
