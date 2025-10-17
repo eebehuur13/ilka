@@ -53,6 +53,8 @@ export async function handleQueryStream(request: Request, env: Env): Promise<Res
     const body: QueryRequest = await request.json();
     const { query, user_id, mode, reasoning = false } = body;
 
+    console.log('[DEBUG] Query received:', { query: query.substring(0, 50), mode, reasoning });
+
     if (!query || !user_id) {
       return jsonResponse({ error: 'Missing query or user_id' }, 400);
     }
@@ -210,6 +212,7 @@ export async function handleQueryStream(request: Request, env: Env): Promise<Res
         
         // Configure thinking based on reasoning toggle
         const thinkingBudget = reasoning ? -1 : 0; // -1 = dynamic, 0 = disabled
+        console.log('[DEBUG] Model-only stream - thinkingBudget:', thinkingBudget, 'reasoning:', reasoning);
 
         try {
           for await (const chunk of gemini.streamContent(query, {
@@ -303,6 +306,7 @@ export async function handleQuery(request: Request, env: Env): Promise<Response>
     if (mode === 'model-only') {
       const gemini = new GeminiClient(env.GEMINI_API_KEY);
       const thinkingBudget = reasoning ? -1 : 0;
+      console.log('[DEBUG] Model-only non-stream - thinkingBudget:', thinkingBudget, 'reasoning:', reasoning);
       
       const result = await gemini.generateContent(query, {
         thinkingBudget,

@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, type KeyboardEvent } from 'react'
-import { Send, Loader2 } from 'lucide-react'
+import { Send, Loader2, Zap, Brain } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import { Dropdown } from '@/components/ui/dropdown'
 import { useChatStore } from '@/stores/useChatStore'
 import { queryDocuments, queryDocumentsStream } from '@/lib/api'
 import { getUserId } from '@/lib/auth'
@@ -15,7 +16,7 @@ interface ChatInputProps {
 
 export const ChatInput = ({ suggestedQuery }: ChatInputProps) => {
   const [input, setInput] = useState('')
-  const { mode, reasoning, isProcessing, setIsProcessing, addMessage } = useChatStore()
+  const { mode, reasoning, setReasoning, isProcessing, setIsProcessing, addMessage } = useChatStore()
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   // Handle suggested query from related terms
@@ -247,40 +248,67 @@ export const ChatInput = ({ suggestedQuery }: ChatInputProps) => {
     }
   }
 
+  const reasoningOptions = [
+    {
+      value: 'false',
+      label: 'Fast',
+      icon: <Zap className="w-4 h-4 text-blue-500" />,
+      description: 'Quick responses'
+    },
+    {
+      value: 'true',
+      label: 'Reasoning',
+      icon: <Brain className="w-4 h-4 text-purple-500" />,
+      description: 'Deep thinking'
+    }
+  ]
+
   return (
     <div className="border-t border-gray-200 bg-white p-4">
       <div className="max-w-3xl mx-auto">
-        <div className="flex items-end gap-2">
-          <div className="flex-1 relative">
-            <Textarea
-              ref={textareaRef}
-              value={input}
-              onChange={(e) => {
-                setInput(e.target.value)
-                adjustHeight()
-              }}
-              onKeyDown={handleKeyDown}
-              placeholder={mode === 'file-search' ? 'Ask about your documents...' : 'Ask me anything...'}
-              className="min-h-[60px] max-h-[200px] resize-none pr-12"
-              disabled={isProcessing}
+        <div className="space-y-2">
+          {/* Model Selector - Only show in model-only mode */}
+          {mode === 'model-only' && (
+            <Dropdown
+              options={reasoningOptions}
+              value={reasoning.toString()}
+              onChange={(val) => setReasoning(val === 'true')}
             />
-            {mode === 'file-search' && (
-              <div className="absolute top-2 right-2">
-                <span className="text-xs text-gray-400">Searching files</span>
-              </div>
-            )}
+          )}
+
+          {/* Input Area */}
+          <div className="flex items-end gap-2">
+            <div className="flex-1 relative">
+              <Textarea
+                ref={textareaRef}
+                value={input}
+                onChange={(e) => {
+                  setInput(e.target.value)
+                  adjustHeight()
+                }}
+                onKeyDown={handleKeyDown}
+                placeholder={mode === 'file-search' ? 'Ask about your documents...' : 'Ask me anything...'}
+                className="min-h-[60px] max-h-[200px] resize-none pr-12"
+                disabled={isProcessing}
+              />
+              {mode === 'file-search' && (
+                <div className="absolute top-2 right-2">
+                  <span className="text-xs text-gray-400">Searching files</span>
+                </div>
+              )}
+            </div>
+            <Button
+              onClick={handleSubmit}
+              disabled={!input.trim() || isProcessing}
+              className="h-[60px] px-6"
+            >
+              {isProcessing ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Send className="w-4 h-4" />
+              )}
+            </Button>
           </div>
-          <Button
-            onClick={handleSubmit}
-            disabled={!input.trim() || isProcessing}
-            className="h-[60px] px-6"
-          >
-            {isProcessing ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Send className="w-4 h-4" />
-            )}
-          </Button>
         </div>
         <p className="text-xs text-gray-500 text-center mt-2">
           Zyn may produce inaccurate information. Always verify important facts.

@@ -152,7 +152,26 @@ export const ChatMessage = ({ message, onRegenerate, onRelatedTermClick }: ChatM
         )}
 
         <div className="prose prose-sm max-w-none">
-          <ReactMarkdown>{hasMultipleAnswers ? (currentAnswer?.answer || '') : message.content}</ReactMarkdown>
+          <ReactMarkdown
+            components={{
+              p: ({children}) => <p className="mb-4 leading-relaxed last:mb-0">{children}</p>,
+              h1: ({children}) => <h1 className="text-xl font-bold mt-6 mb-3 first:mt-0">{children}</h1>,
+              h2: ({children}) => <h2 className="text-lg font-bold mt-5 mb-2 first:mt-0">{children}</h2>,
+              h3: ({children}) => <h3 className="text-base font-semibold mt-4 mb-2 first:mt-0">{children}</h3>,
+              ul: ({children}) => <ul className="list-disc pl-5 mb-4 space-y-1">{children}</ul>,
+              ol: ({children}) => <ol className="list-decimal pl-5 mb-4 space-y-1">{children}</ol>,
+              li: ({children}) => <li className="leading-relaxed">{children}</li>,
+              code: ({node, ...props}) => {
+                const isInline = !node?.position || (node.position.start.line === node.position.end.line)
+                return isInline
+                  ? <code className="bg-gray-100 px-1.5 py-0.5 rounded text-sm font-mono" {...props} />
+                  : <code className="block bg-gray-100 p-3 rounded-md mb-4 text-sm font-mono overflow-x-auto" {...props} />
+              },
+              blockquote: ({children}) => <blockquote className="border-l-4 border-gray-300 pl-4 italic my-4 text-gray-700">{children}</blockquote>,
+            }}
+          >
+            {hasMultipleAnswers ? (currentAnswer?.answer || '') : message.content}
+          </ReactMarkdown>
           {message.isStreaming && <span className="inline-block w-2 h-4 ml-1 bg-gray-900 animate-pulse" />}
         </div>
 
