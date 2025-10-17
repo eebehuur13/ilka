@@ -18,15 +18,16 @@ export async function handleUpload(request: Request, env: Env): Promise<Response
     }
 
     const documentId = crypto.randomUUID();
+    const fileSize = new TextEncoder().encode(content).length;
     
     await env.STORAGE.put(`${user_id}/${documentId}.txt`, content);
 
     await env.DB
       .prepare(`
-        INSERT INTO documents (id, file_name, file_type, user_id, upload_date, status, full_text)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO documents (id, file_name, file_type, user_id, upload_date, status, full_text, file_size)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `)
-      .bind(documentId, file_name, 'text/plain', user_id, Date.now(), 'processing', content)
+      .bind(documentId, file_name, 'text/plain', user_id, Date.now(), 'processing', content, fileSize)
       .run();
 
     await env.QUEUE.send({
@@ -509,7 +510,7 @@ export async function handleListDocuments(request: Request, env: Env): Promise<R
     }
 
     const result = await env.DB
-      .prepare('SELECT id, file_name, status, chunk_count, upload_date FROM documents WHERE user_id = ? ORDER BY upload_date DESC')
+      .prepare('SELECT id, file_name, status, chunk_count, upload_date, file_size FROM documents WHERE user_id = ? ORDER BY upload_date DESC')
       .bind(userId)
       .all();
 

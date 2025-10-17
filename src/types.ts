@@ -17,6 +17,7 @@ export interface Document {
   upload_date: number;
   status: DocumentStatus;
   chunk_count: number | null;
+  file_size: number | null;
   full_text: string | null;
   created_at: number;
   updated_at: number;

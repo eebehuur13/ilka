@@ -20,7 +20,7 @@ function App() {
             file_name: doc.file_name || doc.id,
             status: doc.status,
             chunk_count: doc.chunk_count,
-            file_size: 0,
+            file_size: doc.file_size || 0,
             upload_date: doc.upload_date || Date.now()
           })
         })
