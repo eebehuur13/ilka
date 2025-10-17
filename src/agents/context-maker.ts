@@ -43,15 +43,17 @@ export class ContextMakerAgent {
         continue;
       }
 
-      const mergedText = sectionPassages.map(p => p.text).join('\n\n');
+      // Limit to max 5 passages to keep context focused
+      const limitedPassages = sectionPassages.slice(0, 5);
+      const mergedText = limitedPassages.map(p => p.text).join('\n\n');
       
       expanded.push({
         ...passage,
         text: mergedText,
-        start_line: Math.min(...sectionPassages.map(p => p.start_line)),
-        end_line: Math.max(...sectionPassages.map(p => p.end_line)),
-        word_count: sectionPassages.reduce((sum, p) => sum + p.word_count, 0),
-        token_count: sectionPassages.reduce((sum, p) => sum + p.token_count, 0)
+        start_line: Math.min(...limitedPassages.map(p => p.start_line)),
+        end_line: Math.max(...limitedPassages.map(p => p.end_line)),
+        word_count: limitedPassages.reduce((sum, p) => sum + p.word_count, 0),
+        token_count: limitedPassages.reduce((sum, p) => sum + p.token_count, 0)
       });
     }
 
@@ -96,28 +98,33 @@ export class ContextMakerAgent {
     const processedSections = new Set<string>();
 
     for (const passage of passages) {
-      const sectionKey = passage.document_id;
+      // Use actual section heading, not entire document
+      const sectionKey = `${passage.document_id}:${passage.parent_section_id || passage.heading || 'no-section'}`;
       
       if (processedSections.has(sectionKey)) continue;
       processedSections.add(sectionKey);
 
-      // Get ALL passages from the document
-      const allPassages = await this.getAllDocumentPassages(passage.document_id);
+      // Get passages from SAME SECTION only, not entire document
+      const sectionPassages = passage.parent_section_id || passage.heading
+        ? await this.getSectionPassages(passage.document_id, passage.parent_section_id || passage.heading)
+        : [passage];
 
-      if (allPassages.length === 0) {
+      if (sectionPassages.length === 0) {
         expanded.push(passage);
         continue;
       }
 
-      const mergedText = allPassages.map(p => p.text).join('\n\n');
+      // Limit to max 5 passages to prevent overwhelming writer with noise
+      const limitedPassages = sectionPassages.slice(0, 5);
+      const mergedText = limitedPassages.map(p => p.text).join('\n\n');
       
       expanded.push({
         ...passage,
         text: mergedText,
-        start_line: Math.min(...allPassages.map(p => p.start_line)),
-        end_line: Math.max(...allPassages.map(p => p.end_line)),
-        word_count: allPassages.reduce((sum, p) => sum + p.word_count, 0),
-        token_count: allPassages.reduce((sum, p) => sum + p.token_count, 0)
+        start_line: Math.min(...limitedPassages.map(p => p.start_line)),
+        end_line: Math.max(...limitedPassages.map(p => p.end_line)),
+        word_count: limitedPassages.reduce((sum, p) => sum + p.word_count, 0),
+        token_count: limitedPassages.reduce((sum, p) => sum + p.token_count, 0)
       });
     }
 
@@ -141,7 +148,7 @@ export class ContextMakerAgent {
       .bind(documentId, sectionHeading, sectionHeading)
       .all();
 
-    return (result.results || []) as ScoredPassage[];
+    return (result.results || []) as any as ScoredPassage[];
   }
 
   private async getNeighborPassages(
@@ -158,7 +165,7 @@ export class ContextMakerAgent {
       .bind(documentId, passageIndex - window, passageIndex + window)
       .all();
 
-    return (result.results || []).filter(p => (p as any).passage_index !== passageIndex) as ScoredPassage[];
+    return (result.results || []).filter(p => (p as any).passage_index !== passageIndex) as any as ScoredPassage[];
   }
 
   private async getAllDocumentPassages(documentId: string): Promise<ScoredPassage[]> {
@@ -171,6 +178,6 @@ export class ContextMakerAgent {
       .bind(documentId)
       .all();
 
-    return (result.results || []) as ScoredPassage[];
+    return (result.results || []) as any as ScoredPassage[];
   }
 }

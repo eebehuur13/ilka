@@ -27,7 +27,14 @@ export class Method2BM25Agents {
     const startTime = Date.now();
     let round = 0;
 
-    const normalizedQuery = this.bm25.preprocessQuery(query);
+    // Expand query with analyzer signals: synonyms and related terms
+    const expandedTerms = [
+      query,
+      ...analysis.synonyms.slice(0, 3),
+      ...analysis.related_terms.slice(0, 2)
+    ].join(' ');
+
+    const normalizedQuery = this.bm25.preprocessQuery(expandedTerms);
     let bm25Results = await this.bm25.search(normalizedQuery, { topK: 100, userId });
 
     if (bm25Results.length === 0) {
@@ -40,39 +47,42 @@ export class Method2BM25Agents {
     let reranked = await this.reranker.embeddingRerank(query, bm25Results.slice(0, 50), 0.7);
     let topPassages = reranked.slice(0, 20);
 
-    while (round < 2) {
-      const decision = await this.supervisor.decide(query, topPassages, round);
+    // Answer-based feedback loop: generate answer, verify, then decide whether to widen
+    let answer = await this.writer.write(query, topPassages);
+    let verification = await this.verifier.verify(answer, topPassages);
 
-      if (decision.action === 'proceed') break;
+    while (round < 3 && !verification.passed) {
+      const decision = await this.supervisor.decide(query, topPassages, round, verification);
+
+      if (decision.action === 'proceed') {
+        // Supervisor decided to proceed despite failed verification
+        break;
+      }
 
       if (decision.action === 'widen' && decision.strategy) {
         topPassages = await this.contextMaker.widen(topPassages, decision.strategy);
         round++;
+        
+        // Regenerate answer with wider context
+        answer = await this.writer.write(query, topPassages);
+        verification = await this.verifier.verify(answer, topPassages);
       } else {
         break;
       }
-    }
-
-    const answer = await this.writer.write(query, topPassages);
-    const verification = await this.verifier.verify(answer);
-
-    if (!verification.passed && round < 2) {
-      topPassages = await this.contextMaker.widen(topPassages, 'full-section');
-      const retryAnswer = await this.writer.write(query, topPassages);
-      
-      return {
-        ...retryAnswer,
-        method: 'method2-bm25-agents',
-        latency_ms: Date.now() - startTime,
-        metadata: { rounds: round + 1, verification_retry: true }
-      };
     }
 
     return {
       ...answer,
       method: 'method2-bm25-agents',
       latency_ms: Date.now() - startTime,
-      metadata: { rounds: round, verification: verification }
+      metadata: { 
+        rounds: round, 
+        verification: verification,
+        final_passage_count: topPassages.length,
+        expanded_query: expandedTerms,
+        synonyms_used: analysis.synonyms.slice(0, 3),
+        related_terms_used: analysis.related_terms.slice(0, 2)
+      }
     };
   }
 }

@@ -54,11 +54,8 @@ export class BM25Retriever {
       }
     }
 
-    // Get GLOBAL corpus passage count for correct IDF calculation
-    const globalStats = await this.db
-      .prepare('SELECT COUNT(*) as total FROM passages')
-      .first();
-    const totalPassages = (globalStats?.total as number) || passages.length;
+    // Use per-document passage count for IDF calculation (fixes global IDF overwriting bug)
+    const totalPassages = passages.length;
     
     const avgLength = passages.reduce((sum, p) => sum + p.word_count, 0) / passages.length;
     const uniqueTerms = termIndex.size;
@@ -79,15 +76,15 @@ export class BM25Retriever {
       }
     }
 
-    // Insert/update IDF scores
+    // Insert/update IDF scores (scoped per document to prevent global overwriting)
     for (const [term, docSet] of documentFrequency.entries()) {
       const df = docSet.size;
       const idf = Math.log((totalPassages - df + 0.5) / (df + 0.5) + 1);
       
       statements.push(
         this.db.prepare(
-          'INSERT OR REPLACE INTO bm25_idf (term, document_frequency, idf_score, updated_at) VALUES (?, ?, ?, ?)'
-        ).bind(term, df, idf, Date.now())
+          'INSERT OR REPLACE INTO bm25_idf (term, document_id, document_frequency, idf_score, updated_at) VALUES (?, ?, ?, ?, ?)'
+        ).bind(term, documentId, df, idf, Date.now())
       );
     }
 
@@ -145,7 +142,7 @@ export class BM25Retriever {
         p.token_count,
         d.file_name
       FROM bm25_terms bt
-      JOIN bm25_idf bi ON bi.term = bt.term
+      JOIN bm25_idf bi ON bi.term = bt.term AND bi.document_id = bt.document_id
       JOIN passages p ON p.id = bt.passage_id
       JOIN documents d ON d.id = p.document_id
       WHERE bt.term IN (${allTerms.map(() => '?').join(',')})
@@ -311,7 +308,8 @@ export class BM25Retriever {
           word_count: row.word_count as number,
           token_count: row.token_count as number,
           created_at: 0,
-          score: 0
+          score: 0,
+          file_name: row.file_name as string
         });
       }
 
@@ -371,6 +369,7 @@ export class BM25Retriever {
   async deleteDocumentIndex(documentId: string): Promise<void> {
     await this.db.batch([
       this.db.prepare('DELETE FROM bm25_terms WHERE document_id = ?').bind(documentId),
+      this.db.prepare('DELETE FROM bm25_idf WHERE document_id = ?').bind(documentId),
       this.db.prepare('DELETE FROM bm25_stats WHERE document_id = ?').bind(documentId)
     ]);
   }

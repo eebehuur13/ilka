@@ -47,6 +47,7 @@ export interface Passage {
   word_count: number;
   token_count: number;
   created_at: number;
+  file_name?: string;
 }
 
 export interface ScoredPassage extends Passage {

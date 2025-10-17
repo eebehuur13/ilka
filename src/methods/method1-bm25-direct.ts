@@ -17,7 +17,14 @@ export class Method1BM25Direct {
   async execute(query: string, analysis: QueryAnalysis, userId: string): Promise<Answer> {
     const startTime = Date.now();
 
-    const normalizedQuery = this.bm25.preprocessQuery(query);
+    // Expand query with analyzer signals: synonyms and related terms
+    const expandedTerms = [
+      query,
+      ...analysis.synonyms.slice(0, 3),
+      ...analysis.related_terms.slice(0, 2)
+    ].join(' ');
+
+    const normalizedQuery = this.bm25.preprocessQuery(expandedTerms);
     let bm25Results = await this.bm25.search(normalizedQuery, { topK: 100, userId });
 
     if (bm25Results.length === 0) {
@@ -35,7 +42,12 @@ export class Method1BM25Direct {
     return {
       ...answer,
       method: 'method1-bm25-direct',
-      latency_ms: Date.now() - startTime
+      latency_ms: Date.now() - startTime,
+      metadata: { 
+        expanded_query: expandedTerms,
+        synonyms_used: analysis.synonyms.slice(0, 3),
+        related_terms_used: analysis.related_terms.slice(0, 2)
+      }
     };
   }
 }

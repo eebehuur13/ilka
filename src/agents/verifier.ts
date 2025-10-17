@@ -1,9 +1,9 @@
-import type { Env, Answer } from '../types';
+import type { Env, Answer, ScoredPassage } from '../types';
 
 export class VerifierAgent {
   constructor(private readonly env: Env) {}
 
-  async verify(answer: Answer): Promise<{ passed: boolean; issues: string[] }> {
+  async verify(answer: Answer, passages?: ScoredPassage[]): Promise<{ passed: boolean; issues: string[] }> {
     const issues: string[] = [];
 
     if (answer.citations.length === 0) {
@@ -24,6 +24,17 @@ export class VerifierAgent {
 
     if (answer.text.toLowerCase().includes("i don't know") && answer.text.length < 100) {
       issues.push('Answer indicates lack of information');
+    }
+
+    // Validate citations reference valid passages
+    if (passages && passages.length > 0) {
+      const citationMatches = answer.text.match(/\[(\d+)\]/g) || [];
+      const citedIndices = citationMatches.map(m => parseInt(m.replace(/\[|\]/g, '')) - 1);
+      
+      const invalidCitations = citedIndices.filter(idx => idx < 0 || idx >= passages.length);
+      if (invalidCitations.length > 0) {
+        issues.push(`Invalid citation indices: ${invalidCitations.map(i => `[${i + 1}]`).join(', ')}`);
+      }
     }
 
     const passed = issues.length === 0;

@@ -7,8 +7,19 @@ export class WriterAgent {
     const startTime = Date.now();
     
     const evidenceBlocks = passages.slice(0, 20).map((p, idx) => {
-      return `[${idx + 1}] ${p.heading || 'Passage'} [${p.start_line}-${p.end_line}]\n${p.text}`;
+      const fileName = p.file_name || 'document';
+      const heading = p.heading ? ` - ${p.heading}` : '';
+      return `[${idx + 1}] ${fileName}:${p.start_line}-${p.end_line}${heading}\n${p.text}`;
     }).join('\n\n---\n\n');
+
+    const systemPrompt = `You are a grounded question-answering system. Your purpose is to provide accurate answers based solely on the provided source material.
+
+Critical rules:
+- Every claim must cite a source using [block-number] format
+- Never make statements without citations
+- If information is not in the sources, explicitly state "I don't have enough information to answer this"
+- Be precise and concise
+- Synthesize information across multiple sources when relevant`;
 
     const prompt = `Answer this question using ONLY the provided evidence blocks.
 
@@ -17,16 +28,13 @@ Question: ${query}
 Evidence:
 ${evidenceBlocks}
 
-Rules:
-1. Every sentence must cite a source using [block-number]
-2. If information is not in the blocks, state "I don't know"
-3. Be concise and direct
-4. Synthesize information across blocks when relevant
-
-Answer:`;
+Provide a well-cited answer:`;
 
     const response = await this.env.AI.run('@cf/openai/gpt-oss-120b', {
-      input: [{ role: 'user', content: prompt }],
+      input: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: prompt }
+      ],
       max_output_tokens: 1500,
       temperature: 0.15
     });
@@ -55,7 +63,7 @@ Answer:`;
       .map(idx => {
         const passage = passages[idx];
         return {
-          file_name: 'document',
+          file_name: passage.file_name || 'document',
           start_line: passage.start_line,
           end_line: passage.end_line,
           text: passage.text.substring(0, 200)
