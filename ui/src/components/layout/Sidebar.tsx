@@ -1,30 +1,67 @@
-import { Plus, FileText, Users, Settings, HelpCircle, BarChart3 } from 'lucide-react'
+import { Plus, FileText, Users, Settings, HelpCircle, BarChart3, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Logo } from '@/components/common/Logo'
 import { FileList } from '@/components/files/FileList'
 import { useChatStore } from '@/stores/useChatStore'
 import { useUIStore } from '@/stores/useUIStore'
 import { cn } from '@/lib/utils'
+import { useEffect } from 'react'
 
 export const Sidebar = () => {
   const { conversations, currentConversationId, loadConversation, clearMessages } = useChatStore()
-  const { sidebarOpen, toggleUploadModal } = useUIStore()
+  const { sidebarOpen, toggleSidebar, setSidebarOpen, toggleUploadModal } = useUIStore()
 
   const handleNewChat = () => {
     clearMessages()
   }
 
+  // Close sidebar on mobile by default
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 768) {
+        setSidebarOpen(false)
+      } else {
+        setSidebarOpen(true)
+      }
+    }
+    
+    handleResize()
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
   return (
-    <aside
-      className={cn(
-        "h-screen bg-gray-50 border-r border-gray-200 flex flex-col transition-all duration-300",
-        sidebarOpen ? "w-[260px]" : "w-0 overflow-hidden"
+    <>
+      {/* Mobile Overlay */}
+      {sidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          onClick={toggleSidebar}
+        />
       )}
-    >
+
+      {/* Sidebar */}
+      <aside
+        className={cn(
+          "h-screen bg-gray-50 border-r border-gray-200 flex flex-col transition-all duration-300",
+          "fixed md:relative z-50 md:z-0",
+          sidebarOpen ? "w-[280px] md:w-[260px]" : "w-0 -translate-x-full md:translate-x-0 overflow-hidden"
+        )}
+      >
       {/* Header */}
-      <div className="h-14 px-4 flex items-center gap-2 border-b border-gray-200">
-        <Logo className="w-6 h-6" />
-        <span className="font-semibold text-lg">Zyn</span>
+      <div className="h-14 px-4 flex items-center justify-between border-b border-gray-200">
+        <div className="flex items-center gap-2">
+          <Logo className="w-6 h-6" />
+          <span className="font-semibold text-lg">Zyn</span>
+        </div>
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          className="md:hidden"
+          onClick={toggleSidebar}
+        >
+          <X className="w-5 h-5" />
+        </Button>
       </div>
 
       {/* New Chat Button */}
@@ -104,5 +141,6 @@ export const Sidebar = () => {
         </Button>
       </div>
     </aside>
+    </>
   )
 }

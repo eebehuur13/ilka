@@ -119,9 +119,9 @@ export const ChatArea = ({ onRelatedTermClick }: ChatAreaProps) => {
       <div 
         ref={containerRef}
         onScroll={handleScroll}
-        className="h-full overflow-y-auto"
+        className="h-full overflow-y-auto overscroll-contain"
       >
-        <div className="max-w-3xl mx-auto py-8 px-4 space-y-6">
+        <div className="max-w-3xl mx-auto py-6 md:py-8 px-3 md:px-4 space-y-4 md:space-y-6">
           {messages.map((message) => (
             <ChatMessage 
               key={message.id} 

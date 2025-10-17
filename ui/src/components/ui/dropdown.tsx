@@ -37,7 +37,7 @@ export const Dropdown = ({ options, value, onChange, className }: DropdownProps)
     <div ref={dropdownRef} className={cn("relative", className)}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md border border-gray-300 transition-colors"
+        className="flex items-center gap-2 px-3 py-2 md:py-1.5 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md border border-gray-300 transition-colors min-h-[44px] md:min-h-0"
       >
         {selectedOption?.icon}
         <span className="font-medium">{selectedOption?.label}</span>
@@ -45,7 +45,7 @@ export const Dropdown = ({ options, value, onChange, className }: DropdownProps)
       </button>
 
       {isOpen && (
-        <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-50 overflow-hidden">
+        <div className="absolute top-full left-0 mt-1 w-56 md:w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-50 overflow-hidden">
           {options.map((option) => (
             <button
               key={option.value}
@@ -54,7 +54,7 @@ export const Dropdown = ({ options, value, onChange, className }: DropdownProps)
                 setIsOpen(false)
               }}
               className={cn(
-                "w-full flex items-start gap-3 px-3 py-2.5 text-left transition-colors",
+                "w-full flex items-start gap-3 px-4 py-3 md:px-3 md:py-2.5 text-left transition-colors min-h-[56px] md:min-h-0",
                 option.value === value
                   ? "bg-purple-50 text-purple-900"
                   : "hover:bg-gray-50 text-gray-900"

@@ -264,7 +264,7 @@ export const ChatInput = ({ suggestedQuery }: ChatInputProps) => {
   ]
 
   return (
-    <div className="border-t border-gray-200 bg-white p-4">
+    <div className="border-t border-gray-200 bg-white p-3 md:p-4 pb-safe">
       <div className="max-w-3xl mx-auto">
         <div className="space-y-2">
           {/* Model Selector - Only show in model-only mode */}
@@ -288,7 +288,7 @@ export const ChatInput = ({ suggestedQuery }: ChatInputProps) => {
                 }}
                 onKeyDown={handleKeyDown}
                 placeholder={mode === 'file-search' ? 'Ask about your documents...' : 'Ask me anything...'}
-                className="min-h-[60px] max-h-[200px] resize-none pr-12"
+                className="min-h-[52px] md:min-h-[60px] max-h-[200px] resize-none pr-12 text-base"
                 disabled={isProcessing}
               />
               {mode === 'file-search' && (
@@ -300,12 +300,12 @@ export const ChatInput = ({ suggestedQuery }: ChatInputProps) => {
             <Button
               onClick={handleSubmit}
               disabled={!input.trim() || isProcessing}
-              className="h-[60px] px-6"
+              className="h-[52px] md:h-[60px] px-4 md:px-6 min-w-[52px] md:min-w-[60px]"
             >
               {isProcessing ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <Loader2 className="w-5 h-5 md:w-4 md:h-4 animate-spin" />
               ) : (
-                <Send className="w-4 h-4" />
+                <Send className="w-5 h-5 md:w-4 md:h-4" />
               )}
             </Button>
           </div>
