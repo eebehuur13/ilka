@@ -45,7 +45,7 @@ export const ChatMessage = ({ message }: ChatMessageProps) => {
 
       <div className="flex-1 space-y-3">
         <div className="flex items-center gap-2">
-          <span className="font-medium text-sm">Ilka</span>
+          <span className="font-medium text-sm">Zyn</span>
           <span className="text-xs text-gray-500">{formatTime(message.timestamp)}</span>
         </div>
 

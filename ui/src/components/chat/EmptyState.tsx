@@ -12,7 +12,7 @@ export const EmptyState = () => {
         
         <div>
           <h1 className="text-3xl font-semibold text-gray-900 mb-2">
-            Ilka Knowledge Platform
+            Zyn Knowledge Platform
           </h1>
           <p className="text-gray-600">
             Ask me anything about your uploaded documents or chat freely in model-only mode
@@ -40,7 +40,7 @@ export const EmptyState = () => {
             <HelpCircle className="w-6 h-6 text-rose-500 mb-2" />
             <h3 className="font-medium text-sm mb-1">How it Works</h3>
             <p className="text-xs text-gray-500">
-              Learn about Ilka's features
+              Learn about Zyn's features
             </p>
           </Card>
         </div>

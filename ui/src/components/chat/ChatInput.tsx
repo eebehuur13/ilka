@@ -173,7 +173,7 @@ export const ChatInput = () => {
           </Button>
         </div>
         <p className="text-xs text-gray-500 text-center mt-2">
-          Ilka may produce inaccurate information. Always verify important facts.
+          Zyn may produce inaccurate information. Always verify important facts.
         </p>
       </div>
     </div>

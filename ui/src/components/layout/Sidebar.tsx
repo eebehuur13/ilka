@@ -24,7 +24,7 @@ export const Sidebar = () => {
       {/* Header */}
       <div className="h-14 px-4 flex items-center gap-2 border-b border-gray-200">
         <Logo className="w-6 h-6" />
-        <span className="font-semibold text-lg">Ilka</span>
+        <span className="font-semibold text-lg">Zyn</span>
       </div>
 
       {/* New Chat Button */}
